@@ -1,4 +1,4 @@
-"""invrs_opt - Algorithms for inverse design.
+"""invrs_opt - Optimization algorithms for inverse design.
 
 Copyright (c) 2023 The INVRS-IO authors.
 """
