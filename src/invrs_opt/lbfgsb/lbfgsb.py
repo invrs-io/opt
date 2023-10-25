@@ -187,8 +187,8 @@ def transformed_lbfgsb(
         params, lbfgsb_state_dict = state
         # Avoid in-place updates.
         lbfgsb_state_dict = copy.deepcopy(lbfgsb_state_dict)
-        scipy_lbfgsb_state = ScipyLbfgsbState(  # type: ignore[arg-type]
-            **lbfgsb_state_dict
+        scipy_lbfgsb_state = ScipyLbfgsbState(
+            **lbfgsb_state_dict  # type: ignore[arg-type]
         )
 
         latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
