@@ -3,6 +3,7 @@
 Copyright (c) 2023 Martin F. Schubert
 """
 
+import dataclasses
 import unittest
 
 import jax
@@ -13,15 +14,141 @@ from parameterized import parameterized
 from invrs_opt.lbfgsb import transform
 from totypes import types
 
-TEST_KERNEL = onp.asarray(  # Kernel is intentionally asymmetric.
-    [
-        [0, 1, 1, 0, 0],
-        [1, 1, 1, 1, 1],
-        [0, 1, 1, 1, 1],
-        [0, 0, 1, 0, 0],
-    ],
-    dtype=bool,
-)
+
+class GaussianFilterTest(unittest.TestCase):
+    @parameterized.expand([[1, 5], [3, 3], [5, 1]])
+    def test_transformed_matches_expected(self, minimum_width, minimum_spacing):
+        array = onp.zeros((9, 9))
+        array[4, 4] = 9
+        density = types.Density2DArray(
+            array=array,
+            lower_bound=0,
+            upper_bound=1,
+            minimum_width=minimum_width,
+            minimum_spacing=minimum_spacing,
+        )
+        beta = 1
+        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        expected = onp.asarray(
+            [
+                [0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12],
+                [0.12, 0.12, 0.13, 0.14, 0.14, 0.14, 0.13, 0.12, 0.12],
+                [0.12, 0.13, 0.15, 0.22, 0.27, 0.22, 0.15, 0.13, 0.12],
+                [0.12, 0.14, 0.22, 0.48, 0.64, 0.48, 0.22, 0.14, 0.12],
+                [0.12, 0.14, 0.27, 0.64, 0.82, 0.64, 0.27, 0.14, 0.12],
+                [0.12, 0.14, 0.22, 0.48, 0.64, 0.48, 0.22, 0.14, 0.12],
+                [0.12, 0.13, 0.15, 0.22, 0.27, 0.22, 0.15, 0.13, 0.12],
+                [0.12, 0.12, 0.13, 0.14, 0.14, 0.14, 0.13, 0.12, 0.12],
+                [0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12],
+            ]
+        )
+        onp.testing.assert_allclose(transformed.array, expected, rtol=0.05)
+
+    @parameterized.expand([[1, 1], [3, 1], [5, 1], [10, 1], [10, 0.5], [10, 2]])
+    def test_ones_density_yields_tanh_beta(self, length_scale, upper_bound):
+        array = onp.ones((20, 20)) * upper_bound
+        density = types.Density2DArray(
+            array=array,
+            lower_bound=0,
+            upper_bound=upper_bound,
+            minimum_width=length_scale,
+            minimum_spacing=length_scale,
+        )
+        beta = 1
+        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        onp.testing.assert_allclose(
+            transformed.array,
+            (1 + onp.tanh(beta)) * 0.5 * upper_bound,
+            rtol=0.01,
+        )
+
+    def test_batch_matches_single(self):
+        beta = 4
+        density = types.Density2DArray(
+            array=onp.arange(600).reshape((6, 10, 10)),
+            minimum_width=5,
+            minimum_spacing=5,
+        )
+        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        for i in range(6):
+            transformed_single = transform.density_gaussian_filter_and_tanh(
+                density=dataclasses.replace(
+                    density,
+                    array=density.array[i, :, :],
+                ),
+                beta=beta,
+            )
+            onp.testing.assert_allclose(
+                transformed.array[i, :, :], transformed_single.array
+            )
+
+    def test_periodic(self):
+        beta = 100
+        array = onp.zeros((5, 5))
+        array[0, 0] = 9
+
+        # No periodicity.
+        density = types.Density2DArray(
+            array,
+            minimum_spacing=3,
+            minimum_width=3,
+            periodic=(False, False),
+            lower_bound=0,
+            upper_bound=1,
+        )
+        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        expected = onp.asarray(
+            [
+                [1, 1, 1, 0, 0],
+                [1, 1, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+            ]
+        )
+        onp.testing.assert_allclose(transformed.array, expected, atol=0.01)
+
+        # Periodic along the first axis.
+        density = dataclasses.replace(density, periodic=(True, False))
+        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        expected = onp.asarray(
+            [
+                [1, 1, 0, 0, 0],
+                [1, 1, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+                [1, 1, 0, 0, 0],
+            ]
+        )
+        onp.testing.assert_allclose(transformed.array, expected, atol=0.01)
+
+        # Periodic along the second axis.
+        density = dataclasses.replace(density, periodic=(False, True))
+        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        expected = onp.asarray(
+            [
+                [1, 1, 1, 1, 1],
+                [1, 1, 0, 0, 1],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+            ]
+        )
+        onp.testing.assert_allclose(transformed.array, expected, atol=0.01)
+
+        # Periodic along both axes.
+        density = dataclasses.replace(density, periodic=(True, True))
+        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        expected = onp.asarray(
+            [
+                [1, 1, 0, 0, 1],
+                [1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0],
+            ]
+        )
+        onp.testing.assert_allclose(transformed.array, expected, atol=0.01)
 
 
 class RescaleTest(unittest.TestCase):

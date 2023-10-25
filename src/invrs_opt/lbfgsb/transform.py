@@ -16,38 +16,6 @@ PadMode = Union[str, Tuple[str, str]]
 GAUSSIAN_FWHM_SIZE_MULTIPLE: float = 3.0
 
 
-def normalized_array_from_density(density: types.Density2DArray) -> jnp.ndarray:
-    """Returns an array with values scaled to the range `(-1, 1)`."""
-    value_mid = (density.upper_bound + density.lower_bound) / 2
-    value_range = density.upper_bound - density.lower_bound
-    return jnp.asarray(2 * (density.array - value_mid) / value_range)
-
-
-def rescale_array_for_density(
-    array: jnp.ndarray,
-    density: types.Density2DArray,
-) -> jnp.ndarray:
-    """Rescales an array for the bounds defined by `density`."""
-    value_mid = (density.upper_bound + density.lower_bound) / 2
-    value_range = density.upper_bound - density.lower_bound
-    return array / 2 * value_range + value_mid
-
-
-def apply_fixed_pixels(density: types.Density2DArray) -> types.Density2DArray:
-    """Set fixed pixels with their required values."""
-    fixed_solid = density.fixed_solid
-    fixed_void = density.fixed_void
-    (array,), treedef = tree_util.tree_flatten(density)
-    if fixed_solid is not None:
-        array = jnp.where(fixed_solid, density.upper_bound, array)
-    if fixed_void is not None:
-        array = jnp.where(fixed_void, density.lower_bound, array)
-    transformed_density: types.Density2DArray = tree_util.tree_unflatten(
-        treedef, (array,)
-    )
-    return transformed_density
-
-
 def density_gaussian_filter_and_tanh(
     density: types.Density2DArray,
     beta: float,
@@ -91,6 +59,38 @@ def density_gaussian_filter_and_tanh(
     treedef = jax.tree_util.tree_structure(density)
     transformed_density: types.Density2DArray = jax.tree_util.tree_unflatten(
         treedef, (transformed,)
+    )
+    return transformed_density
+
+
+def normalized_array_from_density(density: types.Density2DArray) -> jnp.ndarray:
+    """Returns an array with values scaled to the range `(-1, 1)`."""
+    value_mid = (density.upper_bound + density.lower_bound) / 2
+    value_range = density.upper_bound - density.lower_bound
+    return jnp.asarray(2 * (density.array - value_mid) / value_range)
+
+
+def rescale_array_for_density(
+    array: jnp.ndarray,
+    density: types.Density2DArray,
+) -> jnp.ndarray:
+    """Rescales an array for the bounds defined by `density`."""
+    value_mid = (density.upper_bound + density.lower_bound) / 2
+    value_range = density.upper_bound - density.lower_bound
+    return array / 2 * value_range + value_mid
+
+
+def apply_fixed_pixels(density: types.Density2DArray) -> types.Density2DArray:
+    """Set fixed pixels with their required values."""
+    fixed_solid = density.fixed_solid
+    fixed_void = density.fixed_void
+    (array,), treedef = tree_util.tree_flatten(density)
+    if fixed_solid is not None:
+        array = jnp.where(fixed_solid, density.upper_bound, array)
+    if fixed_void is not None:
+        array = jnp.where(fixed_void, density.lower_bound, array)
+    transformed_density: types.Density2DArray = tree_util.tree_unflatten(
+        treedef, (array,)
     )
     return transformed_density
 

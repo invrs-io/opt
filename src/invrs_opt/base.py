@@ -4,20 +4,48 @@ Copyright (c) 2023 Martin F. Schubert
 """
 
 import dataclasses
-from typing import Any, Callable
+from typing import Any, Protocol
 
 from totypes import json_utils
 
 PyTree = Any
 
 
+class InitFn(Protocol):
+    """Callable which initializes an optimizer state."""
+
+    def __call__(self, params: PyTree) -> PyTree:
+        ...
+
+
+class ParamsFn(Protocol):
+    """Callable which returns the parameters for an optimizer state."""
+
+    def __call__(self, state: PyTree) -> PyTree:
+        ...
+
+
+class UpdateFn(Protocol):
+    """Callable which updates an optimizer state."""
+
+    def __call__(
+        self,
+        *,
+        grad: PyTree,
+        value: float,
+        params: PyTree,
+        state: PyTree,
+    ) -> PyTree:
+        ...
+
+
 @dataclasses.dataclass
 class Optimizer:
     """Stores the `(init, params, update)` function triple for an optimizer."""
 
-    init: Callable[[PyTree], PyTree]
-    params: Callable[[PyTree], PyTree]
-    update: Callable[[PyTree, float, PyTree, PyTree], PyTree]
+    init: InitFn
+    params: ParamsFn
+    update: UpdateFn
 
 
 # Additional custom types and prefixes used for serializing optimizer state.
