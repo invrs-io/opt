@@ -1,6 +1,6 @@
 """Defines tests for the `lbfgsb.lbfgsb` module.
 
-Copyright (c) 2023 Martin F. Schubert
+Copyright (c) 2023 The INVRS-IO authors.
 """
 
 import unittest
@@ -8,20 +8,66 @@ import unittest
 import jax
 import jax.numpy as jnp
 import numpy as onp
-import parameterized
+from parameterized import parameterized
 import scipy.optimize as spo
 
 from invrs_opt.lbfgsb import lbfgsb
 from totypes import types
 
 
+class DensityLbfgsbBoundsTest(unittest.TestCase):
+    @parameterized.expand([[-1, 1, 1], [-1, 1, -1], [0, 1, 1], [0, 1, -1]])
+    def test_respects_bounds(self, lower_bound, upper_bound, sign):
+        def loss_fn(density):
+            return sign * jnp.sum(density.array)
+
+        params = types.Density2DArray(
+            array=jnp.ones((5, 5)) * (lower_bound + upper_bound) / 2,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+        )
+        opt = lbfgsb.density_lbfgsb(beta=2)
+        state = opt.init(params)
+        for _ in range(10):
+            params = opt.params(state)
+            value, grad = jax.value_and_grad(loss_fn)(params)
+            state = opt.update(grad=grad, value=value, params=params, state=state)
+
+        params = opt.params(state)
+        expected = upper_bound if sign < 0 else lower_bound
+        onp.testing.assert_allclose(params.array, expected)
+
+
+class LbfgsbBoundsTest(unittest.TestCase):
+    @parameterized.expand([[-1, 1, 1], [-1, 1, -1], [0, 1, 1], [0, 1, -1]])
+    def test_respects_bounds(self, lower_bound, upper_bound, sign):
+        def loss_fn(density):
+            return sign * jnp.sum(density.array)
+
+        params = types.Density2DArray(
+            array=jnp.ones((5, 5)) * (lower_bound + upper_bound) / 2,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+        )
+        opt = lbfgsb.lbfgsb()
+        state = opt.init(params)
+        for _ in range(10):
+            params = opt.params(state)
+            value, grad = jax.value_and_grad(loss_fn)(params)
+            state = opt.update(grad=grad, value=value, params=params, state=state)
+
+        params = opt.params(state)
+        expected = upper_bound if sign < 0 else lower_bound
+        onp.testing.assert_allclose(params.array, expected)
+
+
 class LbfgsbInputValidationTest(unittest.TestCase):
-    @parameterized.parameterized.expand([[0], [-1], [500], ["abc"]])
+    @parameterized.expand([[0], [-1], [500], ["abc"]])
     def test_maxcor_validation(self, invalid_maxcor):
         with self.assertRaisesRegex(ValueError, "`maxcor` must be greater than 0"):
             lbfgsb.lbfgsb(maxcor=invalid_maxcor, line_search_max_steps=100)
 
-    @parameterized.parameterized.expand([[0], [-1], ["abc"]])
+    @parameterized.expand([[0], [-1], ["abc"]])
     def test_line_search_max_steps_validation(self, invalid_line_search_max_steps):
         with self.assertRaisesRegex(ValueError, "`line_search_max_steps` must be "):
             lbfgsb.lbfgsb(
@@ -183,7 +229,7 @@ class LbfgsbTest(unittest.TestCase):
         # the other we are using float32.
         onp.testing.assert_allclose(scipy_values[:10], wrapper_values[:10], rtol=1e-6)
 
-    @parameterized.parameterized.expand(
+    @parameterized.expand(
         [
             [2.0],
             [jnp.ones((3,))],

@@ -1,6 +1,6 @@
 """Defines a jax-style wrapper for scipy's L-BFGS-B algorithm.
 
-Copyright (c) 2023 Martin F. Schubert
+Copyright (c) 2023 The INVRS-IO authors.
 """
 
 import copy
@@ -36,6 +36,8 @@ UPDATE_FACTR = 0.0
 
 # Maximum value for the `maxcor` parameter in the L-BFGS-B scheme.
 MAXCOR_MAX_VALUE = 100
+MAXCOR_DEFAULT = 20
+LINE_SEARCH_MAX_STEPS_DEFAULT = 100
 
 # Maps bound scenarios to integers.
 BOUNDS_MAP: Dict[Tuple[bool, bool], int] = {
@@ -49,10 +51,47 @@ FORTRAN_INT = scipy_lbfgsb.types.intvar.dtype
 
 
 def lbfgsb(
-    maxcor: int,
-    line_search_max_steps: int,
+    maxcor: int = MAXCOR_DEFAULT,
+    line_search_max_steps: int = LINE_SEARCH_MAX_STEPS_DEFAULT,
 ) -> base.Optimizer:
-    """Return an optimizer implementing the standard L-BFGS-B algorithm."""
+    """Return an optimizer implementing the standard L-BFGS-B algorithm.
+
+    This optimizer wraps scipy's implementation of the algorithm, and provides
+    a jax-style API to the scheme. The optimizer works with custom types such
+    as the `BoundedArray` to constrain the optimization variable.
+
+    Example usage is as follows:
+
+        def fn(x):
+            leaves_sum_sq = [jnp.sum(y)**2 for y in tree_util.tree_leaves(x)]
+            return jnp.sum(jnp.asarray(leaves_sum_sq))
+
+        x0 = {
+            "a": jnp.ones((3,)),
+            "b": BoundedArray(
+                value=-jnp.ones((2, 5)),
+                lower_bound=-5,
+                upper_bound=5,
+            ),
+        }
+        opt = lbfgsb(maxcor=20, line_search_max_steps=100)
+        state = opt.init(x0)
+        for _ in range(10):
+            x = opt.params(state)
+            value, grad = jax.value_and_grad(fn)(x)
+            state = opt.update(grad, value, state)
+
+    While the algorithm can work with pytrees of jax arrays, numpy arrays can
+    also be used. Thus, e.g. the optimizer can directly be used with autograd.
+
+    Args:
+        maxcor: The maximum number of variable metric corrections used to define
+            the limited memory matrix, in the L-BFGS-B scheme.
+        line_search_max_steps: The maximum number of steps in the line search.
+
+    Returns:
+        The `base.Optimizer`.
+    """
     return transformed_lbfgsb(
         maxcor=maxcor,
         line_search_max_steps=line_search_max_steps,
@@ -61,11 +100,30 @@ def lbfgsb(
 
 
 def density_lbfgsb(
-    maxcor: int,
-    line_search_max_steps: int,
     beta: float,
+    maxcor: int = MAXCOR_DEFAULT,
+    line_search_max_steps: int = LINE_SEARCH_MAX_STEPS_DEFAULT,
 ) -> base.Optimizer:
-    """Return an L-BFGS-B optimizer with additional transforms for density arrays."""
+    """Return an L-BFGS-B optimizer with additional transforms for density arrays.
+
+    Parameters that are of type `DensityArray2D` are represented as latent parameters
+    that are transformed (in the case where lower and upper bounds are `(-1, 1)`) by,
+
+        transformed = tanh(beta * conv(density.array, gaussian_kernel)) / tanh(beta)
+
+    where the kernel has a full-width at half-maximum determined by the minimum width
+    and spacing parameters of the `DensityArray2D`. Where the bounds differ, the
+    density is scaled before the transform is applied, and then unscaled afterwards.
+
+    Args:
+        beta: Determines the steepness of the thresholding.
+        maxcor: The maximum number of variable metric corrections used to define
+            the limited memory matrix, in the L-BFGS-B scheme.
+        line_search_max_steps: The maximum number of steps in the line search.
+
+    Returns:
+        The `base.Optimizer`.
+    """
 
     def transform_fn(tree: PyTree) -> PyTree:
         return tree_util.tree_map(
@@ -98,40 +156,12 @@ def transformed_lbfgsb(
     line_search_max_steps: int,
     transform_fn: Callable[[PyTree], PyTree],
 ) -> base.Optimizer:
-    """Construct an optimizer implementing the L-BFGS-B algorithm.
+    """Construct an latent parameter L-BFGS-B optimizer.
 
     The optimized parameters are termed latent parameters, from which the
     actual parameters returned by the optimizer are obtained using the
     `transform_fn`. In the simple case where this is just `lambda x: x` (i.e.
     the identity), this is equivalent to the standard L-BFGS-B algorithm.
-
-    This optimizer wraps scipy's implementation of the algorithm, and provides
-    a jax-style API to the scheme. The optimizer works with custom types such
-    as the `BoundedArray` to constrain the optimization variable.
-
-    Example usage is as follows:
-
-        def fn(x):
-            leaves_sum_sq = [jnp.sum(y)**2 for y in tree_util.tree_leaves(x)]
-            return jnp.sum(jnp.asarray(leaves_sum_sq))
-
-        x0 = {
-            "a": jnp.ones((3,)),
-            "b": BoundedArray(
-                value=-jnp.ones((2, 5)),
-                lower_bound=-5,
-                upper_bound=5,
-            ),
-        }
-        opt = lbfgsb(maxcor=20, line_search_max_steps=100)
-        state = opt.init(x0)
-        for _ in range(10):
-            x = opt.params(state)
-            value, grad = jax.value_and_grad(fn)(x)
-            state = opt.update(grad, value, state)
-
-    While the algorithm can work with pytrees of jax arrays, numpy arrays can
-    also be used. Thus, e.g. the optimizer can directly be used with autograd.
 
     Args:
         maxcor: The maximum number of variable metric corrections used to define
@@ -204,7 +234,7 @@ def transformed_lbfgsb(
     return base.Optimizer(
         init=init_fn,
         params=params_fn,
-        update=update_fn,  # type: ignore[arg-type]
+        update=update_fn,
     )
 
 
@@ -503,7 +533,7 @@ def _configure_bounds(
     lower_bound_array = [0.0 if x is None else x for x in lower_bound]
     upper_bound_array = [0.0 if x is None else x for x in upper_bound]
     return (
-        onp.asarray(lower_bound_array),
-        onp.asarray(upper_bound_array),
+        onp.asarray(lower_bound_array, onp.float64),
+        onp.asarray(upper_bound_array, onp.float64),
         onp.asarray(bound_type),
     )
