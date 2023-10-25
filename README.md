@@ -1,4 +1,4 @@
-# invrs-opt - Optimization algorithms for inverse design
+# invrs-opt v0.0.0 - Optimization algorithms for inverse design
 
 ## Overview
 
@@ -8,7 +8,7 @@ The `invrs-opt` package defines an optimizer API intended for topology optimizat
 initial_params = ...
 
 optimizer = invrs_opt.lbfgsb()
-state = optimizer.init()
+state = optimizer.init(initial_params)
 
 for _ in range(steps):
     params = optimizer.params(state)
