@@ -11,7 +11,9 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 from jax import tree_util
-from scipy.optimize._lbfgsb_py import _lbfgsb as scipy_lbfgsb  # type: ignore[import-untyped]
+from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
+    _lbfgsb as scipy_lbfgsb,
+)
 
 from invrs_opt.lbfgsb import transform
 from invrs_opt import base
@@ -185,7 +187,9 @@ def transformed_lbfgsb(
         params, lbfgsb_state_dict = state
         # Avoid in-place updates.
         lbfgsb_state_dict = copy.deepcopy(lbfgsb_state_dict)
-        scipy_lbfgsb_state = ScipyLbfgsbState(**lbfgsb_state_dict)  # type: ignore[arg-type]
+        scipy_lbfgsb_state = ScipyLbfgsbState(  # type: ignore[arg-type]
+            **lbfgsb_state_dict
+        )
 
         latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
         _, vjp_fn = jax.vjp(transform_fn, latent_params)
