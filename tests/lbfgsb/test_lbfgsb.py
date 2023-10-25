@@ -1,6 +1,6 @@
 """Defines tests for the `lbfgsb.lbfgsb` module.
 
-Copyright (c) 2023 Martin F. Schubert
+Copyright (c) 2023 The INVRS-IO authors.
 """
 
 import unittest
@@ -20,7 +20,7 @@ class DensityLbfgsbBoundsTest(unittest.TestCase):
     def test_respects_bounds(self, lower_bound, upper_bound, sign):
         def loss_fn(density):
             return sign * jnp.sum(density.array)
-        
+
         params = types.Density2DArray(
             array=jnp.ones((5, 5)) * (lower_bound + upper_bound) / 2,
             lower_bound=lower_bound,
@@ -32,7 +32,7 @@ class DensityLbfgsbBoundsTest(unittest.TestCase):
             params = opt.params(state)
             value, grad = jax.value_and_grad(loss_fn)(params)
             state = opt.update(grad=grad, value=value, params=params, state=state)
-        
+
         params = opt.params(state)
         expected = upper_bound if sign < 0 else lower_bound
         onp.testing.assert_allclose(params.array, expected)
@@ -43,7 +43,7 @@ class LbfgsbBoundsTest(unittest.TestCase):
     def test_respects_bounds(self, lower_bound, upper_bound, sign):
         def loss_fn(density):
             return sign * jnp.sum(density.array)
-        
+
         params = types.Density2DArray(
             array=jnp.ones((5, 5)) * (lower_bound + upper_bound) / 2,
             lower_bound=lower_bound,
@@ -55,7 +55,7 @@ class LbfgsbBoundsTest(unittest.TestCase):
             params = opt.params(state)
             value, grad = jax.value_and_grad(loss_fn)(params)
             state = opt.update(grad=grad, value=value, params=params, state=state)
-        
+
         params = opt.params(state)
         expected = upper_bound if sign < 0 else lower_bound
         onp.testing.assert_allclose(params.array, expected)

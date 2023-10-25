@@ -1,6 +1,6 @@
 """Tests for `lbfgsb.transforms`.
 
-Copyright (c) 2023 Martin F. Schubert
+Copyright (c) 2023 The INVRS-IO authors.
 """
 
 import dataclasses

@@ -1,8 +1,8 @@
-# invrs-opt - Optimization algorithms
+# invrs-opt - Optimization algorithms for inverse design
 
 ## Overview
 
-The `invrs-opt` package defines an optimizer API and (currently) implements the L-BFGS-B optimization algorithm along with some variants. The API is intended to be general so that new algorithms can be accommodated, and is inspired by the functional optimizer approach used in jax. Example usage is as follows:
+The `invrs-opt` package defines an optimizer API intended for topology optimization, inverse design, or AI-guided design. It (currently) implements the L-BFGS-B optimization algorithm along with some variants. The API is intended to be general so that new algorithms can be accommodated, and is inspired by the functional optimizer approach used in jax. Example usage is as follows:
 
 ```python
 initial_params = ...
