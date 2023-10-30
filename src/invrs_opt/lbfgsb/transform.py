@@ -114,8 +114,8 @@ def pad_width_for_kernel_shape(
     """Return the pad width for the trailing dimensions of the kernel."""
     kernel_height, kernel_width = kernel_shape[-2:]
     return (
-        (kernel_height // 2 - (kernel_height + 1) % 2, kernel_height // 2),
-        (kernel_width // 2 - (kernel_width + 1) % 2, kernel_width // 2),
+        (kernel_height // 2, kernel_height // 2 - (kernel_height + 1) % 2),
+        (kernel_width // 2, kernel_width // 2 - (kernel_width + 1) % 2),
     )
 
 
