@@ -337,3 +337,19 @@ class PadWidthForKernelShapeTest(unittest.TestCase):
             window_strides=(1, 1),
         )
         self.assertEqual(y.shape, (1, 1) + array.shape)
+
+    @parameterized.expand([[(2, 3)], [(4, 4)], [(5, 6)]])
+    def test_pad_width_offsets(self, kernel_shape):
+        kernel = onp.zeros(kernel_shape)
+        kernel[kernel_shape[0] // 2, kernel_shape[1] // 2] = 1
+        array = jnp.arange(77).reshape((7, 11)).astype(float)
+        pad_width = transform.pad_width_for_kernel_shape(kernel_shape)
+        padded = jnp.pad(array, pad_width)
+        y = jax.lax.conv_general_dilated(
+            lhs=padded[jnp.newaxis, jnp.newaxis, :, :],  # HCHW
+            rhs=kernel[jnp.newaxis, jnp.newaxis, :, :],  # OIHW
+            padding="VALID",
+            dimension_numbers=("NCHW", "OIHW", "NCHW"),
+            window_strides=(1, 1),
+        )
+        onp.testing.assert_array_equal(y[0, 0, ...], array)
