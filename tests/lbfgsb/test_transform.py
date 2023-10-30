@@ -353,3 +353,10 @@ class PadWidthForKernelShapeTest(unittest.TestCase):
             window_strides=(1, 1),
         )
         onp.testing.assert_array_equal(y[0, 0, ...], array)
+
+
+class GaussianKernelTest(unittest.TestCase):
+    @parameterized.expand([[2], [3], [4], [5]])
+    def test_gaussian_peak_on_gridpoint(self, fwhm_size_multiple):
+        kernel = transform._gaussian_kernel(1.0, fwhm_size_multiple)
+        self.assertEqual(kernel[kernel.shape[0] // 2, kernel.shape[1] // 2], 1.0)

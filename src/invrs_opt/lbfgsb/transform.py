@@ -158,6 +158,9 @@ def _pad_mode_for_density(density: types.Density2DArray) -> Union[str, Tuple[str
 def _gaussian_kernel(fwhm: float, fwhm_size_multiple: float) -> jnp.ndarray:
     """Returns a Gaussian kernel with the specified full-width at half-maximum."""
     kernel_size = max(1, int(jnp.ceil(fwhm * fwhm_size_multiple)))
+    # Ensure the kernel size is odd, so that there is always a central pixel which will
+    # contain the peak value of the Gaussian.
+    kernel_size += (kernel_size + 1) % 2
     d = jnp.arange(0.5, kernel_size) - kernel_size / 2
     x = d[:, jnp.newaxis]
     y = d[jnp.newaxis, :]
