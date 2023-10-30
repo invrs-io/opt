@@ -12,7 +12,7 @@ import numpy as onp
 import parameterized
 
 import invrs_opt
-from totypes import symmetry, types
+from totypes import json_utils, symmetry, types
 
 jax.config.update("jax_enable_x64", True)
 
@@ -153,14 +153,22 @@ def _lists_to_tuple(pytree, max_depth=10):
     return pytree
 
 
+def serialize(pytree) -> str:
+    return json_utils.json_from_pytree(pytree=pytree)
+
+
+def deserialize(serialized):
+    return json_utils.pytree_from_json(serialized=serialized)
+
+
 class BasicOptimizerTest(unittest.TestCase):
     @parameterized.parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
     def test_state_is_serializable(self, params, opt):
         state = opt.init(params)
         leaves, treedef = jax.tree_util.tree_flatten(state)
 
-        serialized_state = invrs_opt.base.serialize(state)
-        restored_state = invrs_opt.base.deserialize(serialized_state)
+        serialized_state = serialize(state)
+        restored_state = deserialize(serialized_state)
         # Serialization/deserialization unavoidably converts tuples to lists.
         # Convert back to tuples to facilitate comparison.
         restored_state = _lists_to_tuple(restored_state)
@@ -211,7 +219,7 @@ class BasicOptimizerTest(unittest.TestCase):
             expected_grad_list.append(grad)
 
         def serdes(x):
-            return invrs_opt.base.deserialize(invrs_opt.base.serialize(x))
+            return deserialize(serialize(x))
 
         # Optimize with serialization.
         params_list = []

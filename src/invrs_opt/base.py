@@ -6,8 +6,6 @@ Copyright (c) 2023 The INVRS-IO authors.
 import dataclasses
 from typing import Any, Protocol
 
-from totypes import json_utils
-
 PyTree = Any
 
 
@@ -46,23 +44,3 @@ class Optimizer:
     init: InitFn
     params: ParamsFn
     update: UpdateFn
-
-
-# Additional custom types and prefixes used for serializing optimizer state.
-CUSTOM_TYPES_AND_PREFIXES = ()
-
-
-def serialize(tree: PyTree) -> str:
-    """Serializes a pytree into a string."""
-    return json_utils.json_from_pytree(
-        tree,
-        extra_custom_types_and_prefixes=CUSTOM_TYPES_AND_PREFIXES,
-    )
-
-
-def deserialize(serialized: str) -> PyTree:
-    """Restores a pytree from a string."""
-    return json_utils.pytree_from_json(
-        serialized,
-        extra_custom_types_and_prefixes=CUSTOM_TYPES_AND_PREFIXES,
-    )
