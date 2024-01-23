@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 import jax
 import jax.numpy as jnp
 import numpy as onp
+from jax import flatten_util
 from jax import tree_util
 from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
     _lbfgsb as scipy_lbfgsb,
@@ -245,13 +246,14 @@ def transformed_lbfgsb(
 
 def _to_numpy(params: PyTree) -> NDArray:
     """Flattens a `params` pytree into a single rank-1 numpy array."""
-    leaves = tree_util.tree_leaves(params)
-    x_numpy: NDArray = onp.concatenate([onp.asarray(leaf).flatten() for leaf in leaves])
-    return x_numpy.astype(onp.float64)
+    x, _ = flatten_util.ravel_pytree(params)  # type: ignore[no-untyped-call]
+    return onp.asarray(x, dtype=onp.float64)
 
 
 def _to_pytree(x_flat: NDArray, params: PyTree) -> PyTree:
     """Restores a pytree from a flat numpy array using the structure of `params`.
+
+    Note that the returned pytree includes jax array leaves.
 
     Args:
         x_flat: The rank-1 numpy array to be restored.
@@ -259,17 +261,10 @@ def _to_pytree(x_flat: NDArray, params: PyTree) -> PyTree:
             pytree.
 
     Returns:
-        The restored pytree.
+        The restored pytree, with jax array leaves.
     """
-    leaves, treedef = tree_util.tree_flatten(params)
-    indices_or_sections = onp.cumsum([onp.size(leaf) for leaf in leaves])
-    x_split_flat = onp.split(x_flat, indices_or_sections)
-    x_split = [x.reshape(onp.shape(leaf)) for x, leaf in zip(x_split_flat, leaves)]
-    x_split_jax = [
-        jnp.asarray(x) if isinstance(leaf, jnp.ndarray) else x
-        for x, leaf in zip(x_split, leaves)
-    ]
-    return tree_util.tree_unflatten(treedef, x_split_jax)
+    _, unflatten_fn = flatten_util.ravel_pytree(params)  # type: ignore[no-untyped-call]
+    return unflatten_fn(jnp.asarray(x_flat, dtype=float))
 
 
 def _bound_for_params(bound: PyTree, params: PyTree) -> ElementwiseBound:
@@ -320,6 +315,8 @@ def _bound_for_params(bound: PyTree, params: PyTree) -> ElementwiseBound:
 
     bound_flat = []
     for b, p in zip(bound_leaves, params_leaves):
+        if p is None:
+            continue
         if b is None or onp.isscalar(b) or onp.shape(b) == ():
             bound_flat += [b] * onp.size(p)
         else:

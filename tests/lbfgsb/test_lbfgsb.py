@@ -297,6 +297,20 @@ class LbfgsbTest(unittest.TestCase):
                     ),
                 }
             ],
+            [
+                {
+                    "a": types.Density2DArray(
+                        array=jnp.ones((3, 3)),
+                        lower_bound=0.0,
+                        upper_bound=1.0,
+                        fixed_solid=None,
+                        fixed_void=None,
+                        minimum_width=1,
+                        minimum_spacing=1,
+                    ),
+                    "b": None,
+                }
+            ],
         ]
     )
     def test_initialize(self, params):
@@ -410,7 +424,7 @@ class ConverterTest(unittest.TestCase):
             jax.tree_util.tree_leaves(restored_params),
         ):
             self.assertTrue(isinstance(a, onp.ndarray))
-            self.assertTrue(isinstance(b, onp.ndarray))
+            self.assertTrue(isinstance(b, jnp.ndarray))
             onp.testing.assert_array_equal(a, b)
 
 
