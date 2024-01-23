@@ -320,6 +320,8 @@ def _bound_for_params(bound: PyTree, params: PyTree) -> ElementwiseBound:
 
     bound_flat = []
     for b, p in zip(bound_leaves, params_leaves):
+        if p is None:
+            continue
         if b is None or onp.isscalar(b) or onp.shape(b) == ():
             bound_flat += [b] * onp.size(p)
         else:
