@@ -424,7 +424,7 @@ class ConverterTest(unittest.TestCase):
             jax.tree_util.tree_leaves(restored_params),
         ):
             self.assertTrue(isinstance(a, onp.ndarray))
-            self.assertTrue(isinstance(b, onp.ndarray))
+            self.assertTrue(isinstance(b, jnp.ndarray))
             onp.testing.assert_array_equal(a, b)
 
 
