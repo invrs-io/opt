@@ -246,7 +246,7 @@ def transformed_lbfgsb(
 
 def _to_numpy(params: PyTree) -> NDArray:
     """Flattens a `params` pytree into a single rank-1 numpy array."""
-    x, _ = flatten_util.ravel_pytree(params)
+    x, _ = flatten_util.ravel_pytree(params)  # type: ignore[no-untyped-call]
     return onp.asarray(x, dtype=onp.float64)
 
 
@@ -263,7 +263,7 @@ def _to_pytree(x_flat: NDArray, params: PyTree) -> PyTree:
     Returns:
         The restored pytree, with jax array leaves.
     """
-    _, unflatten_fn = flatten_util.ravel_pytree(params)
+    _, unflatten_fn = flatten_util.ravel_pytree(params)  # type: ignore[no-untyped-call]
     return unflatten_fn(jnp.asarray(x_flat, dtype=float))
 
 
