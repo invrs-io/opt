@@ -7,13 +7,13 @@ import unittest
 
 import jax
 import jax.numpy as jnp
-from jax import flatten_util
 import numpy as onp
-from parameterized import parameterized
 import scipy.optimize as spo
+from jax import flatten_util
+from parameterized import parameterized
+from totypes import types
 
 from invrs_opt.lbfgsb import lbfgsb
-from totypes import types
 
 
 class DensityLbfgsbBoundsTest(unittest.TestCase):

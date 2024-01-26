@@ -10,20 +10,19 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 import jax
 import jax.numpy as jnp
 import numpy as onp
-from jax import flatten_util
-from jax import tree_util
-from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
-    _lbfgsb as scipy_lbfgsb,
+from jax import flatten_util, tree_util
+from scipy.optimize._lbfgsb_py import (
+    _lbfgsb as scipy_lbfgsb,  # type: ignore[import-untyped]
 )
-
-from invrs_opt.lbfgsb import transform
-from invrs_opt import base
 from totypes import types
+
+from invrs_opt import base
+from invrs_opt.lbfgsb import transform
 
 NDArray = onp.ndarray[Any, Any]
 PyTree = Any
 ElementwiseBound = Union[NDArray, Sequence[Optional[float]]]
-LbfgsbState = Tuple[PyTree, Dict[str, NDArray]]
+LbfgsbState = Tuple[PyTree, Dict[str, jnp.ndarray]]
 
 
 # Task message prefixes for the underlying L-BFGS-B implementation.
@@ -203,7 +202,9 @@ def transformed_lbfgsb(
             params = transform_fn(latent_params)
             return params, scipy_lbfgsb_state.to_jax()
 
-        return jax.pure_callback(_init_pure, _example_state(params, maxcor), params)
+        return jax.pure_callback(  # type: ignore[no-any-return, attr-defined]
+            _init_pure, _example_state(params, maxcor), params
+        )
 
     def params_fn(state: LbfgsbState) -> PyTree:
         """Returns the parameters for the given `state`."""
@@ -239,7 +240,9 @@ def transformed_lbfgsb(
             params = transform_fn(latent_params)
             return params, scipy_lbfgsb_state.to_jax()
 
-        return jax.pure_callback(_update_pure, state, grad, value, params, state)
+        return jax.pure_callback(  # type: ignore[no-any-return, attr-defined]
+            _update_pure, state, grad, value, params, state
+        )
 
     return base.Optimizer(
         init=init_fn,
@@ -342,7 +345,7 @@ def _bound_for_params(bound: PyTree, params: PyTree) -> ElementwiseBound:
 
 def _example_state(params: PyTree, maxcor: int) -> PyTree:
     """Return an example state for the given `params` and `maxcor`."""
-    params_flat, _ = flatten_util.ravel_pytree(params)
+    params_flat, _ = flatten_util.ravel_pytree(params)  # type: ignore[no-untyped-call]
     n = params_flat.size
     float_params = tree_util.tree_map(lambda x: jnp.asarray(x, dtype=float), params)
     example_jax_lbfgsb_state = dict(
@@ -446,7 +449,7 @@ class ScipyLbfgsbState:
         )
 
     @classmethod
-    def from_jax(cls, state_dict) -> "ScipyLbfgsbState":
+    def from_jax(cls, state_dict: Dict[str, jnp.ndarray]) -> "ScipyLbfgsbState":
         """Converts a dictionary of jax arrays to a `ScipyLbfgsbState`."""
         state_dict = copy.deepcopy(state_dict)
         return ScipyLbfgsbState(
@@ -611,7 +614,7 @@ def _configure_bounds(
     )
 
 
-def _array_from_s60_str(s60_str: onp.ndarray) -> jnp.ndarray:
+def _array_from_s60_str(s60_str: NDArray) -> jnp.ndarray:
     """Return a jax array for a numpy s60 string."""
     assert s60_str.shape == (1,)
     return jnp.asarray([int(o) for o in s60_str[0]], dtype=int)
