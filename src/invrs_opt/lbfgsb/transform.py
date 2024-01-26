@@ -8,7 +8,6 @@ from typing import Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax import tree_util
-
 from totypes import types
 
 PadMode = Union[str, Tuple[str, str]]

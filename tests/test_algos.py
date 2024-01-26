@@ -10,9 +10,9 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 import parameterized
+from totypes import json_utils, symmetry, types
 
 import invrs_opt
-from totypes import json_utils, symmetry, types
 
 jax.config.update("jax_enable_x64", True)
 

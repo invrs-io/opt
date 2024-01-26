@@ -10,9 +10,9 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 from parameterized import parameterized
+from totypes import types
 
 from invrs_opt.lbfgsb import transform
-from totypes import types
 
 
 class GaussianFilterTest(unittest.TestCase):
