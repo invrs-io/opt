@@ -12,13 +12,15 @@ PyTree = Any
 class InitFn(Protocol):
     """Callable which initializes an optimizer state."""
 
-    def __call__(self, params: PyTree) -> PyTree: ...
+    def __call__(self, params: PyTree) -> PyTree:
+        ...
 
 
 class ParamsFn(Protocol):
     """Callable which returns the parameters for an optimizer state."""
 
-    def __call__(self, state: PyTree) -> PyTree: ...
+    def __call__(self, state: PyTree) -> PyTree:
+        ...
 
 
 class UpdateFn(Protocol):
@@ -31,7 +33,8 @@ class UpdateFn(Protocol):
         value: float,
         params: PyTree,
         state: PyTree,
-    ) -> PyTree: ...
+    ) -> PyTree:
+        ...
 
 
 @dataclasses.dataclass
