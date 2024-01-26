@@ -188,18 +188,22 @@ def transformed_lbfgsb(
 
     def init_fn(params: PyTree) -> LbfgsbState:
         """Initializes the optimization state."""
-        lower_bound = types.extract_lower_bound(params)
-        upper_bound = types.extract_upper_bound(params)
-        scipy_lbfgsb_state = ScipyLbfgsbState.init(
-            x0=_to_numpy(params),
-            lower_bound=_bound_for_params(lower_bound, params),
-            upper_bound=_bound_for_params(upper_bound, params),
-            maxcor=maxcor,
-            line_search_max_steps=line_search_max_steps,
-        )
-        latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
-        params = transform_fn(latent_params)
-        return (params, dataclasses.asdict(scipy_lbfgsb_state))
+
+        def _init_pure(params: PyTree) -> LbfgsbState:
+            lower_bound = types.extract_lower_bound(params)
+            upper_bound = types.extract_upper_bound(params)
+            scipy_lbfgsb_state = ScipyLbfgsbState.init(
+                x0=_to_numpy(params),
+                lower_bound=_bound_for_params(lower_bound, params),
+                upper_bound=_bound_for_params(upper_bound, params),
+                maxcor=maxcor,
+                line_search_max_steps=line_search_max_steps,
+            )
+            latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
+            params = transform_fn(latent_params)
+            return params, scipy_lbfgsb_state.to_jax()
+
+        return jax.pure_callback(_init_pure, _example_state(params, maxcor), params)
 
     def params_fn(state: LbfgsbState) -> PyTree:
         """Returns the parameters for the given `state`."""
@@ -214,23 +218,28 @@ def transformed_lbfgsb(
         state: LbfgsbState,
     ) -> LbfgsbState:
         """Updates the state."""
-        del params
-        params, lbfgsb_state_dict = state
-        # Avoid in-place updates.
-        lbfgsb_state_dict = copy.deepcopy(lbfgsb_state_dict)
-        scipy_lbfgsb_state = ScipyLbfgsbState(
-            **lbfgsb_state_dict  # type: ignore[arg-type]
-        )
 
-        latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
-        _, vjp_fn = jax.vjp(transform_fn, latent_params)
-        (latent_grad,) = vjp_fn(grad)
+        def _update_pure(
+            grad: PyTree, value: float, params: PyTree, state: LbfgsbState
+        ) -> LbfgsbState:
+            del params
 
-        assert onp.size(value) == 1
-        scipy_lbfgsb_state.update(grad=_to_numpy(latent_grad), value=onp.asarray(value))
-        latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
-        params = transform_fn(latent_params)
-        return (params, dataclasses.asdict(scipy_lbfgsb_state))
+            params, jax_lbfgsb_state = state
+            scipy_lbfgsb_state = ScipyLbfgsbState.from_jax(jax_lbfgsb_state)
+
+            latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
+            _, vjp_fn = jax.vjp(transform_fn, latent_params)
+            (latent_grad,) = vjp_fn(grad)
+
+            assert onp.size(value) == 1
+            scipy_lbfgsb_state.update(
+                grad=_to_numpy(latent_grad), value=onp.asarray(value)
+            )
+            latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
+            params = transform_fn(latent_params)
+            return params, scipy_lbfgsb_state.to_jax()
+
+        return jax.pure_callback(_update_pure, state, grad, value, params, state)
 
     return base.Optimizer(
         init=init_fn,
@@ -331,6 +340,29 @@ def _bound_for_params(bound: PyTree, params: PyTree) -> ElementwiseBound:
     return bound_flat
 
 
+def _example_state(params: PyTree, maxcor: int) -> PyTree:
+    """Return an example state for the given `params` and `maxcor`."""
+    params_flat, _ = flatten_util.ravel_pytree(params)
+    n = params_flat.size
+    float_params = tree_util.tree_map(lambda x: jnp.asarray(x, dtype=float), params)
+    example_jax_lbfgsb_state = dict(
+        x=jnp.zeros(n, dtype=float),
+        _maxcor=jnp.zeros((), dtype=int),
+        _line_search_max_steps=jnp.zeros((), dtype=int),
+        _wa=jnp.ones(_wa_size(n=n, maxcor=maxcor), dtype=float),
+        _iwa=jnp.ones(n * 3, dtype=jnp.int32),  # Fortran int
+        _task=jnp.zeros(59, dtype=int),
+        _csave=jnp.zeros(59, dtype=int),
+        _lsave=jnp.zeros(4, dtype=jnp.int32),  # Fortran int
+        _isave=jnp.zeros(44, dtype=jnp.int32),  # Fortran int
+        _dsave=jnp.zeros(29, dtype=float),
+        _lower_bound=jnp.zeros(n, dtype=float),
+        _upper_bound=jnp.zeros(n, dtype=float),
+        _bound_type=jnp.zeros(n, dtype=int),
+    )
+    return float_params, example_jax_lbfgsb_state
+
+
 # ------------------------------------------------------------------------------
 # Wrapper for scipy's L-BFGS-B implementation.
 # ------------------------------------------------------------------------------
@@ -395,6 +427,44 @@ class ScipyLbfgsbState:
         _validate_array_dtype(self._upper_bound, onp.float64)
         _validate_array_dtype(self._bound_type, int)
 
+    def to_jax(self) -> Dict[str, jnp.ndarray]:
+        """Generates a dictionary of jax arrays defining the state."""
+        return dict(
+            x=jnp.asarray(self.x),
+            _maxcor=jnp.asarray(self._maxcor),
+            _line_search_max_steps=jnp.asarray(self._line_search_max_steps),
+            _wa=jnp.asarray(self._wa),
+            _iwa=jnp.asarray(self._iwa),
+            _task=_array_from_s60_str(self._task),
+            _csave=_array_from_s60_str(self._csave),
+            _lsave=jnp.asarray(self._lsave),
+            _isave=jnp.asarray(self._isave),
+            _dsave=jnp.asarray(self._dsave),
+            _lower_bound=jnp.asarray(self._lower_bound),
+            _upper_bound=jnp.asarray(self._upper_bound),
+            _bound_type=jnp.asarray(self._bound_type),
+        )
+
+    @classmethod
+    def from_jax(cls, state_dict) -> "ScipyLbfgsbState":
+        """Converts a dictionary of jax arrays to a `ScipyLbfgsbState`."""
+        state_dict = copy.deepcopy(state_dict)
+        return ScipyLbfgsbState(
+            x=onp.asarray(state_dict["x"], dtype=onp.float64),
+            _maxcor=int(state_dict["_maxcor"]),
+            _line_search_max_steps=int(state_dict["_line_search_max_steps"]),
+            _wa=onp.asarray(state_dict["_wa"], onp.float64),
+            _iwa=onp.asarray(state_dict["_iwa"], dtype=FORTRAN_INT),
+            _task=_s60_str_from_array(state_dict["_task"]),
+            _csave=_s60_str_from_array(state_dict["_csave"]),
+            _lsave=onp.asarray(state_dict["_lsave"], dtype=FORTRAN_INT),
+            _isave=onp.asarray(state_dict["_isave"], dtype=FORTRAN_INT),
+            _dsave=onp.asarray(state_dict["_dsave"], dtype=onp.float64),
+            _lower_bound=onp.asarray(state_dict["_lower_bound"], dtype=onp.float64),
+            _upper_bound=onp.asarray(state_dict["_upper_bound"], dtype=onp.float64),
+            _bound_type=onp.asarray(state_dict["_bound_type"], dtype=int),
+        )
+
     @classmethod
     def init(
         cls,
@@ -440,12 +510,12 @@ class ScipyLbfgsbState:
 
         # See initialization of internal variables in the `lbfgsb._minimize_lbfgsb`
         # function.
-        wa_shape = 2 * maxcor * n + 5 * n + 11 * maxcor**2 + 8 * maxcor
+        wa_size = _wa_size(n=n, maxcor=maxcor)
         state = ScipyLbfgsbState(
             x=onp.array(x0, onp.float64),
             _maxcor=maxcor,
             _line_search_max_steps=line_search_max_steps,
-            _wa=onp.zeros(wa_shape, onp.float64),
+            _wa=onp.zeros(wa_size, onp.float64),
             _iwa=onp.zeros(3 * n, FORTRAN_INT),
             _task=task,
             _csave=onp.zeros(1, "S60"),
@@ -510,6 +580,11 @@ class ScipyLbfgsbState:
                 break
 
 
+def _wa_size(n: int, maxcor: int) -> int:
+    """Return the size of the `wa` attribute of lbfgsb state."""
+    return 2 * maxcor * n + 5 * n + 11 * maxcor**2 + 8 * maxcor
+
+
 def _validate_array_dtype(x: NDArray, dtype: Union[type, str]) -> None:
     """Validates that `x` is an array with the specified `dtype`."""
     if not isinstance(x, onp.ndarray):
@@ -533,4 +608,18 @@ def _configure_bounds(
         onp.asarray(lower_bound_array, onp.float64),
         onp.asarray(upper_bound_array, onp.float64),
         onp.asarray(bound_type),
+    )
+
+
+def _array_from_s60_str(s60_str: onp.ndarray) -> jnp.ndarray:
+    """Return a jax array for a numpy s60 string."""
+    assert s60_str.shape == (1,)
+    return jnp.asarray([int(o) for o in s60_str[0]], dtype=int)
+
+
+def _s60_str_from_array(array: jnp.ndarray) -> NDArray:
+    """Return a numpy s60 string for a jax array."""
+    return onp.asarray(
+        [b"".join(int(i).to_bytes(length=1, byteorder="big") for i in array)],
+        dtype="S60",
     )
