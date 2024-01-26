@@ -347,12 +347,15 @@ class LbfgsbTest(unittest.TestCase):
     def test_optimization_with_vmap(self):
         def initial_params_fn(key):
             ka, kb = jax.random.split(key)
-            return {"a": jax.random.normal(ka, (10,)), "b": jax.random.normal(kb, (10,))}
+            return {
+                "a": jax.random.normal(ka, (10,)),
+                "b": jax.random.normal(kb, (10,)),
+            }
 
         def loss_fn(params):
             flat, _ = flatten_util.ravel_pytree(params)
             return jnp.sum(jnp.abs(flat**2))
-        
+
         keys = jax.random.split(jax.random.PRNGKey(0))
         opt = lbfgsb.lbfgsb(maxcor=20)
 
@@ -385,7 +388,9 @@ class LbfgsbTest(unittest.TestCase):
                 state = opt.update(grad=grad, value=value, params=params, state=state)
                 no_batch_values[-1].append(value)
 
-        onp.testing.assert_array_equal(batch_values, onp.transpose(no_batch_values, (1, 0)))
+        onp.testing.assert_array_equal(
+            batch_values, onp.transpose(no_batch_values, (1, 0))
+        )
 
 
 class BoundsForParamsTest(unittest.TestCase):
