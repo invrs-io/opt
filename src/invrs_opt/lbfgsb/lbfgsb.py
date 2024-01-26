@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 from jax import flatten_util, tree_util
-import scipy.optimize._lbfgsb_py._lbfgsb as scipy_lbfgsb  # type: ignore[import-untyped]
+from scipy.optimize._lbfgsb_py import _lbfgsb as scipy_lbfgsb  # type: ignore[import-untyped]
 from totypes import types
 
 from invrs_opt import base
@@ -615,7 +615,9 @@ def _configure_bounds(
 def _array_from_s60_str(s60_str: NDArray) -> jnp.ndarray:
     """Return a jax array for a numpy s60 string."""
     assert s60_str.shape == (1,)
-    return jnp.asarray([int(o) for o in s60_str[0]], dtype=int)
+    chars = [int(o) for o in s60_str[0]]
+    chars.extend([32] * (59 - len(chars)))
+    return jnp.asarray(chars, dtype=int)
 
 
 def _s60_str_from_array(array: jnp.ndarray) -> NDArray:
