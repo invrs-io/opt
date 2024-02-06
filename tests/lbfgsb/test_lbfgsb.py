@@ -39,6 +39,44 @@ class DensityLbfgsbBoundsTest(unittest.TestCase):
         onp.testing.assert_allclose(params.array, expected)
 
 
+class DensityLbfgsbInitializeTest(unittest.TestCase):
+    @parameterized.expand(
+        [
+            [-1, 1, -0.95],
+            [-1, 1, -0.50],
+            [-1, 1, 0.00],
+            [-1, 1, 0.50],
+            [-1, 1, 0.95],
+            [0, 1, 0.05],
+            [0, 1, 0.25],
+            [0, 1, 0.00],
+            [0, 1, 0.25],
+            [0, 1, 0.95],
+        ]
+    )
+    def test_initial_params_match_expected(self, lb, ub, value):
+        density = types.Density2DArray(
+            array=jnp.full((10, 10), value),
+            lower_bound=lb,
+            upper_bound=ub,
+        )
+        opt = lbfgsb.density_lbfgsb(beta=4)
+        state = opt.init(density)
+        params = opt.params(state)
+        onp.testing.assert_allclose(density.array, params.array, atol=1e-2)
+
+    def test_initial_params_out_of_bounds(self):
+        density = types.Density2DArray(
+            array=jnp.full((10, 10), 10),
+            lower_bound=-1,
+            upper_bound=1,
+        )
+        opt = lbfgsb.density_lbfgsb(beta=4)
+        state = opt.init(density)
+        params = opt.params(state)
+        onp.testing.assert_allclose(params.array, onp.ones_like(params.array))
+
+
 class LbfgsbBoundsTest(unittest.TestCase):
     @parameterized.expand([[-1, 1, 1], [-1, 1, -1], [0, 1, 1], [0, 1, -1]])
     def test_respects_bounds(self, lower_bound, upper_bound, sign):
