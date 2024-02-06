@@ -388,6 +388,7 @@ class LbfgsbTest(unittest.TestCase):
             return {
                 "a": jax.random.normal(ka, (10,)),
                 "b": jax.random.normal(kb, (10,)),
+                "c": types.Density2DArray(array=jnp.ones((3, 3))),
             }
 
         def loss_fn(params):
@@ -395,7 +396,7 @@ class LbfgsbTest(unittest.TestCase):
             return jnp.sum(jnp.abs(flat**2))
 
         keys = jax.random.split(jax.random.PRNGKey(0))
-        opt = lbfgsb.lbfgsb(maxcor=20)
+        opt = lbfgsb.density_lbfgsb(beta=2, maxcor=20)
 
         # Test batch optimization
         params = jax.vmap(initial_params_fn)(keys)
@@ -426,7 +427,7 @@ class LbfgsbTest(unittest.TestCase):
                 state = opt.update(grad=grad, value=value, params=params, state=state)
                 no_batch_values[-1].append(value)
 
-        onp.testing.assert_array_equal(
+        onp.testing.assert_allclose(
             batch_values, onp.transpose(no_batch_values, (1, 0))
         )
 
