@@ -11,8 +11,8 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 from jax import flatten_util, tree_util
-from scipy.optimize._lbfgsb_py import (
-    _lbfgsb as scipy_lbfgsb,  # type: ignore[import-untyped]
+from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
+    _lbfgsb as scipy_lbfgsb,
 )
 from totypes import types
 
@@ -97,6 +97,7 @@ def lbfgsb(
         maxcor=maxcor,
         line_search_max_steps=line_search_max_steps,
         transform_fn=lambda x: x,
+        initialize_latent_fn=lambda x: x,
     )
 
 
@@ -128,11 +129,16 @@ def density_lbfgsb(
 
     def transform_fn(tree: PyTree) -> PyTree:
         return tree_util.tree_map(
-            lambda x: (
-                transform_density(x) if isinstance(x, types.Density2DArray) else x
-            ),
+            lambda x: transform_density(x) if _is_density(x) else x,
             tree,
-            is_leaf=lambda x: isinstance(x, types.CUSTOM_TYPES),
+            is_leaf=_is_density,
+        )
+
+    def initialize_latent_fn(tree: PyTree) -> PyTree:
+        return tree_util.tree_map(
+            lambda x: initialize_latent_density(x) if _is_density(x) else x,
+            tree,
+            is_leaf=_is_density,
         )
 
     def transform_density(density: types.Density2DArray) -> types.Density2DArray:
@@ -145,10 +151,20 @@ def density_lbfgsb(
         )
         return transform.apply_fixed_pixels(transformed)
 
+    def initialize_latent_density(
+        density: types.Density2DArray,
+    ) -> types.Density2DArray:
+        array = transform.normalized_array_from_density(density)
+        array = jnp.clip(array, -1, 1)
+        array *= jnp.tanh(beta)
+        latent_array = jnp.arctanh(array) / beta
+        return dataclasses.replace(density, array=latent_array)
+
     return transformed_lbfgsb(
         maxcor=maxcor,
         line_search_max_steps=line_search_max_steps,
         transform_fn=transform_fn,
+        initialize_latent_fn=initialize_latent_fn,
     )
 
 
@@ -156,6 +172,7 @@ def transformed_lbfgsb(
     maxcor: int,
     line_search_max_steps: int,
     transform_fn: Callable[[PyTree], PyTree],
+    initialize_latent_fn: Callable[[PyTree], PyTree],
 ) -> base.Optimizer:
     """Construct an latent parameter L-BFGS-B optimizer.
 
@@ -170,6 +187,8 @@ def transformed_lbfgsb(
         line_search_max_steps: The maximum number of steps in the line search.
         transform_fn: Function which transforms the internal latent parameters to
             the parameters returned by the optimizer.
+        initialize_latent_fn: Function which computes the initial latent parameters
+            given the initial parameters.
 
     Returns:
         The `base.Optimizer`.
@@ -206,7 +225,9 @@ def transformed_lbfgsb(
             latent_params,
             jax_lbfgsb_state,
         ) = jax.pure_callback(  # type: ignore[attr-defined]
-            _init_pure, _example_state(params, maxcor), params
+            _init_pure,
+            _example_state(params, maxcor),
+            initialize_latent_fn(params),
         )
         return transform_fn(latent_params), latent_params, jax_lbfgsb_state
 
@@ -264,6 +285,11 @@ def transformed_lbfgsb(
 # ------------------------------------------------------------------------------
 # Helper functions.
 # ------------------------------------------------------------------------------
+
+
+def _is_density(leaf: Any) -> Any:
+    """Return `True` if `leaf` is a density array."""
+    return isinstance(leaf, types.Density2DArray)
 
 
 def _to_numpy(params: PyTree) -> NDArray:
