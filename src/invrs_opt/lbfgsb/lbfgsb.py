@@ -158,6 +158,7 @@ def density_lbfgsb(
         array = jnp.clip(array, -1, 1)
         array *= jnp.tanh(beta)
         latent_array = jnp.arctanh(array) / beta
+        latent_array = transform.rescale_array_for_density(latent_array, density)
         return dataclasses.replace(density, array=latent_array)
 
     return transformed_lbfgsb(
