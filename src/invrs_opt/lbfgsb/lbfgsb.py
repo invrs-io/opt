@@ -11,8 +11,8 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 from jax import flatten_util, tree_util
-from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
-    _lbfgsb as scipy_lbfgsb,
+from scipy.optimize._lbfgsb_py import (
+    _lbfgsb as scipy_lbfgsb,  # type: ignore[import-untyped]
 )
 from totypes import types
 
@@ -22,7 +22,8 @@ from invrs_opt.lbfgsb import transform
 NDArray = onp.ndarray[Any, Any]
 PyTree = Any
 ElementwiseBound = Union[NDArray, Sequence[Optional[float]]]
-LbfgsbState = Tuple[PyTree, Dict[str, jnp.ndarray]]
+JaxLbfgsbDict = Dict[str, jnp.ndarray]
+LbfgsbState = Tuple[PyTree, PyTree, JaxLbfgsbDict]
 
 
 # Task message prefixes for the underlying L-BFGS-B implementation.
@@ -188,7 +189,7 @@ def transformed_lbfgsb(
     def init_fn(params: PyTree) -> LbfgsbState:
         """Initializes the optimization state."""
 
-        def _init_pure(params: PyTree) -> LbfgsbState:
+        def _init_pure(params: PyTree) -> Tuple[PyTree, JaxLbfgsbDict]:
             lower_bound = types.extract_lower_bound(params)
             upper_bound = types.extract_upper_bound(params)
             scipy_lbfgsb_state = ScipyLbfgsbState.init(
@@ -199,16 +200,19 @@ def transformed_lbfgsb(
                 line_search_max_steps=line_search_max_steps,
             )
             latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
-            params = transform_fn(latent_params)
-            return params, scipy_lbfgsb_state.to_jax()
+            return latent_params, scipy_lbfgsb_state.to_jax()
 
-        return jax.pure_callback(  # type: ignore[no-any-return, attr-defined]
+        (
+            latent_params,
+            jax_lbfgsb_state,
+        ) = jax.pure_callback(  # type: ignore[attr-defined]
             _init_pure, _example_state(params, maxcor), params
         )
+        return transform_fn(latent_params), latent_params, jax_lbfgsb_state
 
     def params_fn(state: LbfgsbState) -> PyTree:
         """Returns the parameters for the given `state`."""
-        params, _ = state
+        params, _, _ = state
         return params
 
     def update_fn(
@@ -219,30 +223,36 @@ def transformed_lbfgsb(
         state: LbfgsbState,
     ) -> LbfgsbState:
         """Updates the state."""
+        del params
 
         def _update_pure(
-            grad: PyTree, value: float, params: PyTree, state: LbfgsbState
-        ) -> LbfgsbState:
-            del params
-
-            params, jax_lbfgsb_state = state
-            scipy_lbfgsb_state = ScipyLbfgsbState.from_jax(jax_lbfgsb_state)
-
-            latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
-            _, vjp_fn = jax.vjp(transform_fn, latent_params)
-            (latent_grad,) = vjp_fn(grad)
-
+            latent_grad: PyTree,
+            value: jnp.ndarray,
+            jax_lbfgsb_state: JaxLbfgsbDict,
+        ) -> Tuple[PyTree, JaxLbfgsbDict]:
             assert onp.size(value) == 1
+            scipy_lbfgsb_state = ScipyLbfgsbState.from_jax(jax_lbfgsb_state)
             scipy_lbfgsb_state.update(
                 grad=_to_numpy(latent_grad), value=onp.asarray(value)
             )
-            latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
-            params = transform_fn(latent_params)
-            return params, scipy_lbfgsb_state.to_jax()
+            latent_params = _to_pytree(scipy_lbfgsb_state.x, latent_grad)
+            return latent_params, scipy_lbfgsb_state.to_jax()
 
-        return jax.pure_callback(  # type: ignore[no-any-return, attr-defined]
-            _update_pure, state, grad, value, params, state
+        params, latent_params, jax_lbfgsb_state = state
+        _, vjp_fn = jax.vjp(transform_fn, latent_params)
+        (latent_grad,) = vjp_fn(grad)
+
+        (
+            latent_params,
+            jax_lbfgsb_state,
+        ) = jax.pure_callback(  # type: ignore[attr-defined]
+            _update_pure,
+            (latent_params, jax_lbfgsb_state),
+            latent_grad,
+            value,
+            jax_lbfgsb_state,
         )
+        return transform_fn(latent_params), latent_params, jax_lbfgsb_state
 
     return base.Optimizer(
         init=init_fn,
