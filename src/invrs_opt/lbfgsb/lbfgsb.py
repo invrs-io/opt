@@ -261,10 +261,12 @@ def transformed_lbfgsb(
             flat_latent_params = jnp.asarray(scipy_lbfgsb_state.x)
             return flat_latent_params, scipy_lbfgsb_state.to_jax()
 
-        params, latent_params, jax_lbfgsb_state = state
+        _, latent_params, jax_lbfgsb_state = state
         _, vjp_fn = jax.vjp(transform_fn, latent_params)
         (latent_grad,) = vjp_fn(grad)
-        flat_latent_grad, unflatten_fn = flatten_util.ravel_pytree(latent_grad)
+        flat_latent_grad, unflatten_fn = flatten_util.ravel_pytree(
+            latent_grad
+        )  # type: ignore[no-untyped-call]
 
         (
             flat_latent_params,
