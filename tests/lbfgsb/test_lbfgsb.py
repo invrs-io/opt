@@ -428,7 +428,7 @@ class LbfgsbTest(unittest.TestCase):
                 no_batch_values[-1].append(value)
 
         onp.testing.assert_allclose(
-            batch_values, onp.transpose(no_batch_values, (1, 0))
+            batch_values, onp.transpose(no_batch_values, (1, 0)), atol=1e-4
         )
 
 

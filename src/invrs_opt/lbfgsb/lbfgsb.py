@@ -248,32 +248,35 @@ def transformed_lbfgsb(
         del params
 
         def _update_pure(
-            latent_grad: PyTree,
+            flat_latent_grad: PyTree,
             value: jnp.ndarray,
             jax_lbfgsb_state: JaxLbfgsbDict,
         ) -> Tuple[PyTree, JaxLbfgsbDict]:
             assert onp.size(value) == 1
             scipy_lbfgsb_state = ScipyLbfgsbState.from_jax(jax_lbfgsb_state)
             scipy_lbfgsb_state.update(
-                grad=_to_numpy(latent_grad), value=onp.asarray(value)
+                grad=onp.asarray(flat_latent_grad, dtype=onp.float64),
+                value=onp.asarray(value, dtype=onp.float64),
             )
-            latent_params = _to_pytree(scipy_lbfgsb_state.x, latent_grad)
-            return latent_params, scipy_lbfgsb_state.to_jax()
+            flat_latent_params = jnp.asarray(scipy_lbfgsb_state.x)
+            return flat_latent_params, scipy_lbfgsb_state.to_jax()
 
         params, latent_params, jax_lbfgsb_state = state
         _, vjp_fn = jax.vjp(transform_fn, latent_params)
         (latent_grad,) = vjp_fn(grad)
+        flat_latent_grad, unflatten_fn = flatten_util.ravel_pytree(latent_grad)
 
         (
-            latent_params,
+            flat_latent_params,
             jax_lbfgsb_state,
         ) = jax.pure_callback(  # type: ignore[attr-defined]
             _update_pure,
-            (latent_params, jax_lbfgsb_state),
-            latent_grad,
+            (flat_latent_grad, jax_lbfgsb_state),
+            flat_latent_grad,
             value,
             jax_lbfgsb_state,
         )
+        latent_params = unflatten_fn(flat_latent_params)
         return transform_fn(latent_params), latent_params, jax_lbfgsb_state
 
     return base.Optimizer(
