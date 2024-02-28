@@ -22,6 +22,7 @@ SERVER_ADDRESS = None
 
 
 def login(server_address: str) -> None:
+    """Set the global server address and create a requests session."""
     global SESSION
     global SERVER_ADDRESS
     SESSION = requests.Session()
