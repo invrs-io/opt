@@ -78,9 +78,11 @@ def optimizer_client(
         grad: PyTree,
         value: float,
         params: PyTree,
-        state_token: StateToken,
+        state: StateToken,
     ) -> StateToken:
         """Handles 'update' requests."""
+        state_token = state
+        del state
         serialized_data = json_utils.json_from_pytree(
             {
                 labels.OPT_CONFIG: opt_config,
@@ -104,11 +106,13 @@ def optimizer_client(
         return new_state_token
 
     def params_fn(
-        state_token: StateToken,
+        state: StateToken,
         timeout: float = 60.0,
         poll_interval: float = 0.1,
     ) -> PyTree:
         """Handles 'params' requests."""
+        state_token = state
+        del state
         assert timeout >= poll_interval
         start_time = time.time()
         while time.time() < start_time + timeout:
@@ -129,11 +133,7 @@ def optimizer_client(
         response = json.loads(get_response.text)
         return json_utils.pytree_from_json(response[labels.PARAMS])
 
-    return base.Optimizer(
-        init=init_fn,
-        update=update_fn,  # type: ignore[arg-type]
-        params=params_fn,  # type: ignore[arg-type]
-    )
+    return base.Optimizer(init=init_fn, update=update_fn, params=params_fn)
 
 
 # -----------------------------------------------------------------------------
