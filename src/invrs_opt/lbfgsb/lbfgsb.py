@@ -321,7 +321,7 @@ def transformed_lbfgsb(
     )
 
 
-def is_converged(state: LbfgsbState) -> bool:
+def is_converged(state: LbfgsbState) -> jnp.ndarray:
     """Returns `True` if the optimization has converged."""
     return state[2]["converged"]
 
@@ -484,7 +484,7 @@ class ScipyLbfgsbState:
     """
 
     x: NDArray
-    converged: bool
+    converged: NDArray
     # Private attributes correspond to internal variables in the `scipy.optimize.
     # lbfgsb._minimize_lbfgsb` function.
     _maxcor: int
@@ -616,8 +616,8 @@ class ScipyLbfgsbState:
             converged=onp.asarray(False),
             _maxcor=maxcor,
             _line_search_max_steps=line_search_max_steps,
-            _ftol=ftol,
-            _gtol=gtol,
+            _ftol=onp.asarray(ftol, onp.float64),
+            _gtol=onp.asarray(gtol, onp.float64),
             _wa=onp.zeros(wa_size, onp.float64),
             _iwa=onp.zeros(3 * n, FORTRAN_INT),
             _task=task,
@@ -682,7 +682,7 @@ class ScipyLbfgsbState:
             )
             task_str = self._task.tobytes()
             if task_str.startswith(TASK_CONVERGED):
-                self.converged = True
+                self.converged = onp.asarray(True)
             if task_str.startswith(TASK_FG):
                 break
 
