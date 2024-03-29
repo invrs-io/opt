@@ -29,16 +29,16 @@ LbfgsbState = Tuple[PyTree, PyTree, JaxLbfgsbDict]
 # Task message prefixes for the underlying L-BFGS-B implementation.
 TASK_START = b"START"
 TASK_FG = b"FG"
+TASK_CONVERGED = b"CONVERGENCE"
 
-# Parameters which configure the state update step.
 UPDATE_IPRINT = -1
-UPDATE_PGTOL = 0.0
-UPDATE_FACTR = 0.0
 
 # Maximum value for the `maxcor` parameter in the L-BFGS-B scheme.
 MAXCOR_MAX_VALUE = 100
 MAXCOR_DEFAULT = 20
 LINE_SEARCH_MAX_STEPS_DEFAULT = 100
+FTOL_DEFAULT = 0.0
+GTOL_DEFAULT = 0.0
 
 # Maps bound scenarios to integers.
 BOUNDS_MAP: Dict[Tuple[bool, bool], int] = {
@@ -54,6 +54,8 @@ FORTRAN_INT = scipy_lbfgsb.types.intvar.dtype
 def lbfgsb(
     maxcor: int = MAXCOR_DEFAULT,
     line_search_max_steps: int = LINE_SEARCH_MAX_STEPS_DEFAULT,
+    ftol: float = FTOL_DEFAULT,
+    gtol: float = GTOL_DEFAULT,
 ) -> base.Optimizer:
     """Return an optimizer implementing the standard L-BFGS-B algorithm.
 
@@ -85,10 +87,17 @@ def lbfgsb(
     While the algorithm can work with pytrees of jax arrays, numpy arrays can
     also be used. Thus, e.g. the optimizer can directly be used with autograd.
 
+    When the optimization has converged (according to `ftol` or `gtol` criteria), the
+    optimizer simply returns the parameters which obtained the converged result. The
+    convergence can be queried by `is_converged(state)`.
+
     Args:
         maxcor: The maximum number of variable metric corrections used to define
             the limited memory matrix, in the L-BFGS-B scheme.
         line_search_max_steps: The maximum number of steps in the line search.
+        ftol: Tolerance for stopping criteria based on function values. See scipy
+            documentation for details.
+        gtol: Tolerance for stopping criteria based on gradient.
 
     Returns:
         The `base.Optimizer`.
@@ -96,6 +105,8 @@ def lbfgsb(
     return transformed_lbfgsb(
         maxcor=maxcor,
         line_search_max_steps=line_search_max_steps,
+        ftol=ftol,
+        gtol=gtol,
         transform_fn=lambda x: x,
         initialize_latent_fn=lambda x: x,
     )
@@ -105,6 +116,8 @@ def density_lbfgsb(
     beta: float,
     maxcor: int = MAXCOR_DEFAULT,
     line_search_max_steps: int = LINE_SEARCH_MAX_STEPS_DEFAULT,
+    ftol: float = FTOL_DEFAULT,
+    gtol: float = GTOL_DEFAULT,
 ) -> base.Optimizer:
     """Return an L-BFGS-B optimizer with additional transforms for density arrays.
 
@@ -117,11 +130,18 @@ def density_lbfgsb(
     and spacing parameters of the `DensityArray2D`. Where the bounds differ, the
     density is scaled before the transform is applied, and then unscaled afterwards.
 
+    When the optimization has converged (according to `ftol` or `gtol` criteria), the
+    optimizer simply returns the parameters which obtained the converged result. The
+    convergence can be queried by `is_converged(state)`.
+
     Args:
         beta: Determines the steepness of the thresholding.
         maxcor: The maximum number of variable metric corrections used to define
             the limited memory matrix, in the L-BFGS-B scheme.
         line_search_max_steps: The maximum number of steps in the line search.
+        ftol: Tolerance for stopping criteria based on function values. See scipy
+            documentation for details.
+        gtol: Tolerance for stopping criteria based on gradient.
 
     Returns:
         The `base.Optimizer`.
@@ -164,6 +184,8 @@ def density_lbfgsb(
     return transformed_lbfgsb(
         maxcor=maxcor,
         line_search_max_steps=line_search_max_steps,
+        ftol=ftol,
+        gtol=gtol,
         transform_fn=transform_fn,
         initialize_latent_fn=initialize_latent_fn,
     )
@@ -172,6 +194,8 @@ def density_lbfgsb(
 def transformed_lbfgsb(
     maxcor: int,
     line_search_max_steps: int,
+    ftol: float,
+    gtol: float,
     transform_fn: Callable[[PyTree], PyTree],
     initialize_latent_fn: Callable[[PyTree], PyTree],
 ) -> base.Optimizer:
@@ -182,10 +206,17 @@ def transformed_lbfgsb(
     `transform_fn`. In the simple case where this is just `lambda x: x` (i.e.
     the identity), this is equivalent to the standard L-BFGS-B algorithm.
 
+    When the optimization has converged (according to `ftol` or `gtol` criteria), the
+    optimizer simply returns the parameters which obtained the converged result. The
+    convergence can be queried by `is_converged(state)`.
+
     Args:
         maxcor: The maximum number of variable metric corrections used to define
             the limited memory matrix, in the L-BFGS-B scheme.
         line_search_max_steps: The maximum number of steps in the line search.
+        ftol: Tolerance for stopping criteria based on function values. See scipy
+            documentation for details.
+        gtol: Tolerance for stopping criteria based on gradient.
         transform_fn: Function which transforms the internal latent parameters to
             the parameters returned by the optimizer.
         initialize_latent_fn: Function which computes the initial latent parameters
@@ -218,6 +249,8 @@ def transformed_lbfgsb(
                 upper_bound=_bound_for_params(upper_bound, params),
                 maxcor=maxcor,
                 line_search_max_steps=line_search_max_steps,
+                ftol=ftol,
+                gtol=gtol,
             )
             latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
             return latent_params, scipy_lbfgsb_state.to_jax()
@@ -286,6 +319,11 @@ def transformed_lbfgsb(
         params=params_fn,
         update=update_fn,
     )
+
+
+def is_converged(state: LbfgsbState) -> bool:
+    """Returns `True` if the optimization has converged."""
+    return state[2]["converged"]
 
 
 # ------------------------------------------------------------------------------
@@ -392,8 +430,11 @@ def _example_state(params: PyTree, maxcor: int) -> PyTree:
     float_params = tree_util.tree_map(lambda x: jnp.asarray(x, dtype=float), params)
     example_jax_lbfgsb_state = dict(
         x=jnp.zeros(n, dtype=float),
+        converged=jnp.asarray(False),
         _maxcor=jnp.zeros((), dtype=int),
         _line_search_max_steps=jnp.zeros((), dtype=int),
+        _ftol=jnp.zeros((), dtype=float),
+        _gtol=jnp.zeros((), dtype=float),
         _wa=jnp.ones(_wa_size(n=n, maxcor=maxcor), dtype=float),
         _iwa=jnp.ones(n * 3, dtype=jnp.int32),  # Fortran int
         _task=jnp.zeros(59, dtype=int),
@@ -443,10 +484,13 @@ class ScipyLbfgsbState:
     """
 
     x: NDArray
+    converged: bool
     # Private attributes correspond to internal variables in the `scipy.optimize.
     # lbfgsb._minimize_lbfgsb` function.
     _maxcor: int
     _line_search_max_steps: int
+    _ftol: NDArray
+    _gtol: NDArray
     _wa: NDArray
     _iwa: NDArray
     _task: NDArray
@@ -476,8 +520,11 @@ class ScipyLbfgsbState:
         """Generates a dictionary of jax arrays defining the state."""
         return dict(
             x=jnp.asarray(self.x),
+            converged=jnp.asarray(self.converged),
             _maxcor=jnp.asarray(self._maxcor),
             _line_search_max_steps=jnp.asarray(self._line_search_max_steps),
+            _ftol=jnp.asarray(self._ftol),
+            _gtol=jnp.asarray(self._gtol),
             _wa=jnp.asarray(self._wa),
             _iwa=jnp.asarray(self._iwa),
             _task=_array_from_s60_str(self._task),
@@ -496,8 +543,11 @@ class ScipyLbfgsbState:
         state_dict = copy.deepcopy(state_dict)
         return ScipyLbfgsbState(
             x=onp.asarray(state_dict["x"], dtype=onp.float64),
+            converged=onp.asarray(state_dict["converged"], dtype=bool),
             _maxcor=int(state_dict["_maxcor"]),
             _line_search_max_steps=int(state_dict["_line_search_max_steps"]),
+            _ftol=onp.asarray(state_dict["_ftol"], dtype=onp.float64),
+            _gtol=onp.asarray(state_dict["_gtol"], dtype=onp.float64),
             _wa=onp.asarray(state_dict["_wa"], onp.float64),
             _iwa=onp.asarray(state_dict["_iwa"], dtype=FORTRAN_INT),
             _task=_s60_str_from_array(state_dict["_task"]),
@@ -518,6 +568,8 @@ class ScipyLbfgsbState:
         upper_bound: ElementwiseBound,
         maxcor: int,
         line_search_max_steps: int,
+        ftol: float,
+        gtol: float,
     ) -> "ScipyLbfgsbState":
         """Initializes the `ScipyLbfgsbState` for `x0`.
 
@@ -528,6 +580,9 @@ class ScipyLbfgsbState:
             maxcor: The maximum number of variable metric corrections used to define
                 the limited memory matrix, in the L-BFGS-B scheme.
             line_search_max_steps: The maximum number of steps in the line search.
+            ftol: Tolerance for stopping criteria based on function values. See scipy
+                documentation for details.
+            gtol: Tolerance for stopping criteria based on gradient.
 
         Returns:
             The `ScipyLbfgsbState`.
@@ -558,8 +613,11 @@ class ScipyLbfgsbState:
         wa_size = _wa_size(n=n, maxcor=maxcor)
         state = ScipyLbfgsbState(
             x=onp.array(x0, onp.float64),
+            converged=onp.asarray(False),
             _maxcor=maxcor,
             _line_search_max_steps=line_search_max_steps,
+            _ftol=ftol,
+            _gtol=gtol,
             _wa=onp.zeros(wa_size, onp.float64),
             _iwa=onp.zeros(3 * n, FORTRAN_INT),
             _task=task,
@@ -582,12 +640,14 @@ class ScipyLbfgsbState:
         grad: NDArray,
         value: NDArray,
     ) -> None:
-        """Performs an in-place update of the `ScipyLbfgsbState`.
+        """Performs an in-place update of the `ScipyLbfgsbState` if not converged.
 
         Args:
             grad: The function gradient for the current `x`.
             value: The scalar function value for the current `x`.
         """
+        if self.converged:
+            return
         if grad.shape != self.x.shape:
             raise ValueError(
                 f"`grad` must have the same shape as attribute `x`, but got shapes "
@@ -608,8 +668,8 @@ class ScipyLbfgsbState:
                 nbd=self._bound_type,
                 f=value,
                 g=grad,
-                factr=UPDATE_FACTR,
-                pgtol=UPDATE_PGTOL,
+                factr=self._ftol / onp.finfo(float).eps,
+                pgtol=self._gtol,
                 wa=self._wa,
                 iwa=self._iwa,
                 task=self._task,
@@ -621,6 +681,8 @@ class ScipyLbfgsbState:
                 maxls=self._line_search_max_steps,
             )
             task_str = self._task.tobytes()
+            if task_str.startswith(TASK_CONVERGED):
+                self.converged = True
             if task_str.startswith(TASK_FG):
                 break
 

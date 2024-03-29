@@ -431,6 +431,25 @@ class LbfgsbTest(unittest.TestCase):
             batch_values, onp.transpose(no_batch_values, (1, 0)), atol=1e-4
         )
 
+    def test_converged(self):
+        def loss_fn(x):
+            return jnp.sum(x**2)
+
+        x = jnp.ones((5,))
+
+        opt = lbfgsb.lbfgsb()
+        state = opt.init(x)
+
+        for i in range(100):
+            params = opt.params(state)
+            value, grad = jax.value_and_grad(loss_fn)(params)
+            state = opt.update(grad=grad, value=value, params=params, state=state)
+            if lbfgsb.is_converged(state):
+                break
+
+        # The optimization should converge in fewer than 20 steps.
+        self.assertLess(i, 20)
+
 
 class BoundsForParamsTest(unittest.TestCase):
     def test_none_bounds(self):
@@ -525,6 +544,8 @@ class ScipyLbfgsStateTest(unittest.TestCase):
                 upper_bound=onp.ones((2, 2)),
                 maxcor=20,
                 line_search_max_steps=100,
+                ftol=0,
+                gtol=0,
             )
 
     def test_lower_bound_shape_validation(self):
@@ -535,6 +556,8 @@ class ScipyLbfgsStateTest(unittest.TestCase):
                 upper_bound=onp.ones((4,)),
                 maxcor=20,
                 line_search_max_steps=100,
+                ftol=0,
+                gtol=0,
             )
 
     def test_upper_bound_shape_validation(self):
@@ -545,6 +568,8 @@ class ScipyLbfgsStateTest(unittest.TestCase):
                 upper_bound=onp.ones((3,)),
                 maxcor=20,
                 line_search_max_steps=100,
+                ftol=0,
+                gtol=0,
             )
 
     def test_maxcor_positive(self):
@@ -555,6 +580,8 @@ class ScipyLbfgsStateTest(unittest.TestCase):
                 upper_bound=onp.ones((4,)),
                 maxcor=0,
                 line_search_max_steps=100,
+                ftol=0,
+                gtol=0,
             )
 
     def test_unbounded_trajectory_matches_scipy(self):
@@ -587,6 +614,8 @@ class ScipyLbfgsStateTest(unittest.TestCase):
             upper_bound=[None] * 10,
             maxcor=20,
             line_search_max_steps=100,
+            ftol=0,
+            gtol=0,
         )
         num_steps = len(scipy_values)
         wrapper_values = []
@@ -637,6 +666,8 @@ class ScipyLbfgsStateTest(unittest.TestCase):
             upper_bound=ub,
             maxcor=20,
             line_search_max_steps=100,
+            ftol=0,
+            gtol=0,
         )
         num_steps = len(scipy_values)
         wrapper_values = []
