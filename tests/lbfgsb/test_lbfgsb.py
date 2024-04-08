@@ -15,6 +15,8 @@ from totypes import types
 
 from invrs_opt.lbfgsb import lbfgsb
 
+jax.config.update("jax_enable_x64", True)
+
 
 class DensityLbfgsbBoundsTest(unittest.TestCase):
     @parameterized.expand([[-1, 1, 1], [-1, 1, -1], [0, 1, 1], [0, 1, -1]])
