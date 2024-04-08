@@ -288,8 +288,8 @@ def transformed_lbfgsb(
             assert onp.size(value) == 1
             scipy_lbfgsb_state = ScipyLbfgsbState.from_jax(jax_lbfgsb_state)
             scipy_lbfgsb_state.update(
-                grad=onp.asarray(flat_latent_grad, dtype=onp.float64),
-                value=onp.asarray(value, dtype=onp.float64),
+                grad=onp.array(flat_latent_grad, dtype=onp.float64),
+                value=onp.array(value, dtype=onp.float64),
             )
             flat_latent_params = jnp.asarray(scipy_lbfgsb_state.x)
             return flat_latent_params, scipy_lbfgsb_state.to_jax()
