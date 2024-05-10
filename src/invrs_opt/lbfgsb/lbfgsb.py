@@ -662,6 +662,13 @@ class ScipyLbfgsbState:
         print(f"{self.x.flags.writeable=}")
         print(f"{value.flags.writeable=}")
         print(f"{grad.flags.writeable=}")
+        print(f"{self._wa.flags.writeable=}")
+        print(f"{self._iwa.flags.writeable=}")
+        print(f"{self._task.flags.writeable=}")
+        print(f"{self._csave.flags.writeable=}")
+        print(f"{self._lsave.flags.writeable=}")
+        print(f"{self._isave.flags.writeable=}")
+        print(f"{self._dsave.flags.writeable=}")
         for _ in range(3):
             scipy_lbfgsb.setulb(
                 m=self._maxcor,
