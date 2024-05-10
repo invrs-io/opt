@@ -258,7 +258,7 @@ def transformed_lbfgsb(
         (
             latent_params,
             jax_lbfgsb_state,
-        ) = jax.pure_callback(  # type: ignore[attr-defined]
+        ) = jax.pure_callback(
             _init_pure,
             _example_state(params, maxcor),
             initialize_latent_fn(params),
@@ -304,7 +304,7 @@ def transformed_lbfgsb(
         (
             flat_latent_params,
             jax_lbfgsb_state,
-        ) = jax.pure_callback(  # type: ignore[attr-defined]
+        ) = jax.pure_callback(
             _update_pure,
             (flat_latent_grad, jax_lbfgsb_state),
             flat_latent_grad,
@@ -542,7 +542,7 @@ class ScipyLbfgsbState:
         """Converts a dictionary of jax arrays to a `ScipyLbfgsbState`."""
         state_dict = copy.deepcopy(state_dict)
         return ScipyLbfgsbState(
-            x=onp.asarray(state_dict["x"], dtype=onp.float64),
+            x=onp.array(state_dict["x"], dtype=onp.float64),
             converged=onp.asarray(state_dict["converged"], dtype=bool),
             _maxcor=int(state_dict["_maxcor"]),
             _line_search_max_steps=int(state_dict["_line_search_max_steps"]),
@@ -659,6 +659,9 @@ class ScipyLbfgsbState:
         # The `setulb` function will sometimes return with a task that does not
         # require a value and gradient evaluation. In this case we simply call it
         # again, advancing past such "dummy" steps.
+        print(f"{self.x.flags.W=}")
+        print(f"{value.flags.W=}")
+        print(f"{grad.flags.W=}")
         for _ in range(3):
             scipy_lbfgsb.setulb(
                 m=self._maxcor,
