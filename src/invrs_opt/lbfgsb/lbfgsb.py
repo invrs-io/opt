@@ -258,7 +258,7 @@ def transformed_lbfgsb(
         (
             latent_params,
             jax_lbfgsb_state,
-        ) = jax.pure_callback(  # type: ignore[attr-defined]
+        ) = jax.pure_callback(
             _init_pure,
             _example_state(params, maxcor),
             initialize_latent_fn(params),
@@ -304,7 +304,7 @@ def transformed_lbfgsb(
         (
             flat_latent_params,
             jax_lbfgsb_state,
-        ) = jax.pure_callback(  # type: ignore[attr-defined]
+        ) = jax.pure_callback(
             _update_pure,
             (flat_latent_grad, jax_lbfgsb_state),
             flat_latent_grad,
@@ -542,19 +542,19 @@ class ScipyLbfgsbState:
         """Converts a dictionary of jax arrays to a `ScipyLbfgsbState`."""
         state_dict = copy.deepcopy(state_dict)
         return ScipyLbfgsbState(
-            x=onp.asarray(state_dict["x"], dtype=onp.float64),
+            x=onp.array(state_dict["x"], dtype=onp.float64),
             converged=onp.asarray(state_dict["converged"], dtype=bool),
             _maxcor=int(state_dict["_maxcor"]),
             _line_search_max_steps=int(state_dict["_line_search_max_steps"]),
             _ftol=onp.asarray(state_dict["_ftol"], dtype=onp.float64),
             _gtol=onp.asarray(state_dict["_gtol"], dtype=onp.float64),
-            _wa=onp.asarray(state_dict["_wa"], onp.float64),
-            _iwa=onp.asarray(state_dict["_iwa"], dtype=FORTRAN_INT),
+            _wa=onp.array(state_dict["_wa"], onp.float64),
+            _iwa=onp.array(state_dict["_iwa"], dtype=FORTRAN_INT),
             _task=_s60_str_from_array(state_dict["_task"]),
             _csave=_s60_str_from_array(state_dict["_csave"]),
-            _lsave=onp.asarray(state_dict["_lsave"], dtype=FORTRAN_INT),
-            _isave=onp.asarray(state_dict["_isave"], dtype=FORTRAN_INT),
-            _dsave=onp.asarray(state_dict["_dsave"], dtype=onp.float64),
+            _lsave=onp.array(state_dict["_lsave"], dtype=FORTRAN_INT),
+            _isave=onp.array(state_dict["_isave"], dtype=FORTRAN_INT),
+            _dsave=onp.array(state_dict["_dsave"], dtype=onp.float64),
             _lower_bound=onp.asarray(state_dict["_lower_bound"], dtype=onp.float64),
             _upper_bound=onp.asarray(state_dict["_upper_bound"], dtype=onp.float64),
             _bound_type=onp.asarray(state_dict["_bound_type"], dtype=int),
