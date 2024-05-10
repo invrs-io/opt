@@ -659,16 +659,6 @@ class ScipyLbfgsbState:
         # The `setulb` function will sometimes return with a task that does not
         # require a value and gradient evaluation. In this case we simply call it
         # again, advancing past such "dummy" steps.
-        print(f"{self.x.flags.writeable=}")
-        print(f"{value.flags.writeable=}")
-        print(f"{grad.flags.writeable=}")
-        print(f"{self._wa.flags.writeable=}")
-        print(f"{self._iwa.flags.writeable=}")
-        print(f"{self._task.flags.writeable=}")
-        print(f"{self._csave.flags.writeable=}")
-        print(f"{self._lsave.flags.writeable=}")
-        print(f"{self._isave.flags.writeable=}")
-        print(f"{self._dsave.flags.writeable=}")
         for _ in range(3):
             scipy_lbfgsb.setulb(
                 m=self._maxcor,
