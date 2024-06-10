@@ -6,6 +6,9 @@ Copyright (c) 2023 The INVRS-IO authors.
 import dataclasses
 from typing import Any, Protocol
 
+import optax  # type: ignore[import-untyped]
+from totypes import json_utils
+
 PyTree = Any
 
 
@@ -44,3 +47,8 @@ class Optimizer:
     init: InitFn
     params: ParamsFn
     update: UpdateFn
+
+
+# TODO: consider programatically registering all optax states here.
+json_utils.register_custom_type(optax.EmptyState)
+json_utils.register_custom_type(optax.ScaleByAdamState)

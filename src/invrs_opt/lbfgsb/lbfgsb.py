@@ -16,8 +16,7 @@ from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
 )
 from totypes import types
 
-from invrs_opt import base
-from invrs_opt.lbfgsb import transform
+from invrs_opt import base, transform
 
 NDArray = onp.ndarray[Any, Any]
 PyTree = Any

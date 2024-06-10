@@ -4,15 +4,14 @@ Copyright (c) 2023 The INVRS-IO authors.
 """
 
 import json
-import requests
 import time
 from typing import Any, Dict, Optional
 
+import requests
 from totypes import json_utils
 
 from invrs_opt import base
 from invrs_opt.experimental import labels
-
 
 PyTree = Any
 StateToken = str
