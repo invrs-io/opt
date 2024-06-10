@@ -3,7 +3,7 @@ from typing import Any, Callable, Tuple
 
 import jax
 import jax.numpy as jnp
-import optax
+import optax  # type: ignore[import-untyped]
 from jax import tree_util
 from totypes import types
 

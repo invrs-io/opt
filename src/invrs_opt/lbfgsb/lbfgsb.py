@@ -11,8 +11,8 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 from jax import flatten_util, tree_util
-from scipy.optimize._lbfgsb_py import (
-    _lbfgsb as scipy_lbfgsb,  # type: ignore[import-untyped]
+from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
+    _lbfgsb as scipy_lbfgsb,
 )
 from totypes import types
 

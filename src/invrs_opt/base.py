@@ -6,7 +6,7 @@ Copyright (c) 2023 The INVRS-IO authors.
 import dataclasses
 from typing import Any, Protocol
 
-import optax
+import optax  # type: ignore[import-untyped]
 from totypes import json_utils
 
 PyTree = Any
