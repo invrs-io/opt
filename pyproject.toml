@@ -20,6 +20,7 @@ dependencies = [
     "jaxlib",
     "numpy",
     "requests",
+    "optax",
     "scipy",
     "totypes",
     "types-requests",
