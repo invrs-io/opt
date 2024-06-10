@@ -1,4 +1,4 @@
-"""Tests for `lbfgsb.transforms`.
+"""Tests for `transforms`.
 
 Copyright (c) 2023 The INVRS-IO authors.
 """
@@ -12,7 +12,7 @@ import numpy as onp
 from parameterized import parameterized
 from totypes import types
 
-from invrs_opt.lbfgsb import transform
+from invrs_opt import transform
 
 
 class GaussianFilterTest(unittest.TestCase):

@@ -9,6 +9,7 @@ import unittest
 import jax
 import jax.numpy as jnp
 import numpy as onp
+import optax
 import parameterized
 from totypes import json_utils, symmetry, types
 
@@ -21,6 +22,8 @@ jax.config.update("jax_enable_x64", True)
 OPTIMIZERS = [
     invrs_opt.lbfgsb(maxcor=20, line_search_max_steps=100),
     invrs_opt.density_lbfgsb(maxcor=20, line_search_max_steps=100, beta=2.0),
+    invrs_opt.wrapped_optax(optax.adam(1e-2)),
+    invrs_opt.density_wrapped_optax(optax.adam(1e-2), beta=2.0),
 ]
 
 # Various parameter combinations tested in this module.
