@@ -106,13 +106,15 @@ def transformed_wrapped_optax(
         state: WrappedOptaxState,
     ) -> WrappedOptaxState:
         """Updates the state."""
-        del value
+        del value, params
 
         _, latent_params, opt_state = state
         _, vjp_fn = jax.vjp(transform_fn, latent_params)
         (latent_grad,) = vjp_fn(grad)
 
-        updates, opt_state = opt.update(latent_grad, opt_state)
+        updates, opt_state = opt.update(
+            updates=latent_grad, state=opt_state, params=latent_params
+        )
         latent_params = optax.apply_updates(params=latent_params, updates=updates)
         latent_params = _clip(latent_params)
         params = transform_fn(latent_params)
