@@ -12,7 +12,7 @@ import numpy as onp
 from parameterized import parameterized
 from totypes import types
 
-from invrs_opt import transform
+from invrs_opt.parameterization import transforms
 
 
 class GaussianFilterTest(unittest.TestCase):
@@ -28,7 +28,7 @@ class GaussianFilterTest(unittest.TestCase):
             minimum_spacing=minimum_spacing,
         )
         beta = 1
-        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        transformed = transforms.density_gaussian_filter_and_tanh(density, beta=beta)
         expected = onp.asarray(
             [
                 [0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12],
@@ -55,7 +55,7 @@ class GaussianFilterTest(unittest.TestCase):
             minimum_spacing=length_scale,
         )
         beta = 1
-        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        transformed = transforms.density_gaussian_filter_and_tanh(density, beta=beta)
         onp.testing.assert_allclose(
             transformed.array,
             (1 + onp.tanh(beta)) * 0.5 * upper_bound,
@@ -69,9 +69,9 @@ class GaussianFilterTest(unittest.TestCase):
             minimum_width=5,
             minimum_spacing=5,
         )
-        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        transformed = transforms.density_gaussian_filter_and_tanh(density, beta=beta)
         for i in range(6):
-            transformed_single = transform.density_gaussian_filter_and_tanh(
+            transformed_single = transforms.density_gaussian_filter_and_tanh(
                 density=dataclasses.replace(
                     density,
                     array=density.array[i, :, :],
@@ -96,7 +96,7 @@ class GaussianFilterTest(unittest.TestCase):
             lower_bound=0,
             upper_bound=1,
         )
-        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        transformed = transforms.density_gaussian_filter_and_tanh(density, beta=beta)
         expected = onp.asarray(
             [
                 [1, 1, 1, 0, 0],
@@ -110,7 +110,7 @@ class GaussianFilterTest(unittest.TestCase):
 
         # Periodic along the first axis.
         density = dataclasses.replace(density, periodic=(True, False))
-        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        transformed = transforms.density_gaussian_filter_and_tanh(density, beta=beta)
         expected = onp.asarray(
             [
                 [1, 1, 0, 0, 0],
@@ -124,7 +124,7 @@ class GaussianFilterTest(unittest.TestCase):
 
         # Periodic along the second axis.
         density = dataclasses.replace(density, periodic=(False, True))
-        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        transformed = transforms.density_gaussian_filter_and_tanh(density, beta=beta)
         expected = onp.asarray(
             [
                 [1, 1, 1, 1, 1],
@@ -138,7 +138,7 @@ class GaussianFilterTest(unittest.TestCase):
 
         # Periodic along both axes.
         density = dataclasses.replace(density, periodic=(True, True))
-        transformed = transform.density_gaussian_filter_and_tanh(density, beta=beta)
+        transformed = transforms.density_gaussian_filter_and_tanh(density, beta=beta)
         expected = onp.asarray(
             [
                 [1, 1, 0, 0, 1],
@@ -164,7 +164,7 @@ class RescaleTest(unittest.TestCase):
             minimum_spacing=1,
         )
         # Compute `array`, which should now have values between `-1` and `1`.
-        array = transform.normalized_array_from_density(density)
+        array = transforms.normalized_array_from_density(density)
         expected = jnp.linspace(-1.0, 1.0).reshape((10, 5))
         onp.testing.assert_allclose(array, expected, rtol=1e-5)
 
@@ -180,7 +180,7 @@ class RescaleTest(unittest.TestCase):
             minimum_spacing=1,
         )
         array = jnp.linspace(-1.0, 1.0).reshape((10, 5))
-        rescaled = transform.rescale_array_for_density(array, dummy_density)
+        rescaled = transforms.rescale_array_for_density(array, dummy_density)
         expected = jnp.linspace(lower_bound, upper_bound).reshape((10, 5))
         onp.testing.assert_allclose(rescaled, expected, rtol=1e-5)
 
@@ -213,7 +213,7 @@ class FixedPixelTest(unittest.TestCase):
             lower_bound=-0.5,
             upper_bound=3.0,
         )
-        density = transform.apply_fixed_pixels(density)
+        density = transforms.apply_fixed_pixels(density)
         onp.testing.assert_array_equal(density.array, expected)
 
 
@@ -235,8 +235,8 @@ class Pad2DTest(unittest.TestCase):
                 [10, 10, 11, 12, 13, 14, 14],
             ]
         )
-        padded = transform.pad2d(array, ((1, 1), (1, 1)), "edge")
-        padded_both_specified = transform.pad2d(
+        padded = transforms.pad2d(array, ((1, 1), (1, 1)), "edge")
+        padded_both_specified = transforms.pad2d(
             array, ((1, 1), (1, 1)), ("edge", "edge")
         )
         onp.testing.assert_array_equal(padded, expected)
@@ -259,8 +259,8 @@ class Pad2DTest(unittest.TestCase):
                 [4, 0, 1, 2, 3, 4, 0],
             ]
         )
-        padded = transform.pad2d(array, ((1, 1), (1, 1)), "wrap")
-        padded_both_specified = transform.pad2d(
+        padded = transforms.pad2d(array, ((1, 1), (1, 1)), "wrap")
+        padded_both_specified = transforms.pad2d(
             array, ((1, 1), (1, 1)), ("wrap", "wrap")
         )
         onp.testing.assert_array_equal(padded, expected)
@@ -283,7 +283,7 @@ class Pad2DTest(unittest.TestCase):
                 [0, 0, 1, 2, 3, 4, 4],
             ]
         )
-        padded = transform.pad2d(array, ((1, 1), (1, 1)), ("wrap", "edge"))
+        padded = transforms.pad2d(array, ((1, 1), (1, 1)), ("wrap", "edge"))
         onp.testing.assert_array_equal(padded, expected)
 
     def test_pad2d_edge_wrap(self):
@@ -303,20 +303,20 @@ class Pad2DTest(unittest.TestCase):
                 [14, 10, 11, 12, 13, 14, 10],
             ]
         )
-        padded = transform.pad2d(array, ((1, 1), (1, 1)), ("edge", "wrap"))
+        padded = transforms.pad2d(array, ((1, 1), (1, 1)), ("edge", "wrap"))
         onp.testing.assert_array_equal(padded, expected)
 
     def test_pad2d_batch_dims(self):
         array = jnp.arange(300).reshape((2, 1, 5, 10, 3))
         pad_width = ((3, 4), (1, 2))
-        padded = transform.pad2d(array, pad_width, "wrap")
+        padded = transforms.pad2d(array, pad_width, "wrap")
         self.assertSequenceEqual(padded.shape, (2, 1, 5, 17, 6))
         for i in range(array.shape[0]):
             for j in range(array.shape[1]):
                 for k in range(array.shape[2]):
                     onp.testing.assert_array_equal(
                         padded[i, j, k, :, :],
-                        transform.pad2d(array[i, j, k, :, :], pad_width, "wrap"),
+                        transforms.pad2d(array[i, j, k, :, :], pad_width, "wrap"),
                     )
 
 
@@ -327,7 +327,7 @@ class PadWidthForKernelShapeTest(unittest.TestCase):
         # valid padding returns an array with the original shape.
         kernel = jnp.ones(kernel_shape)
         array = jnp.arange(77).reshape((7, 11)).astype(float)
-        pad_width = transform.pad_width_for_kernel_shape(kernel_shape)
+        pad_width = transforms.pad_width_for_kernel_shape(kernel_shape)
         padded = jnp.pad(array, pad_width)
         y = jax.lax.conv_general_dilated(
             lhs=padded[jnp.newaxis, jnp.newaxis, :, :],  # HCHW
@@ -343,7 +343,7 @@ class PadWidthForKernelShapeTest(unittest.TestCase):
         kernel = onp.zeros(kernel_shape)
         kernel[kernel_shape[0] // 2, kernel_shape[1] // 2] = 1
         array = jnp.arange(77).reshape((7, 11)).astype(float)
-        pad_width = transform.pad_width_for_kernel_shape(kernel_shape)
+        pad_width = transforms.pad_width_for_kernel_shape(kernel_shape)
         padded = jnp.pad(array, pad_width)
         y = jax.lax.conv_general_dilated(
             lhs=padded[jnp.newaxis, jnp.newaxis, :, :],  # HCHW
@@ -358,5 +358,5 @@ class PadWidthForKernelShapeTest(unittest.TestCase):
 class GaussianKernelTest(unittest.TestCase):
     @parameterized.expand([[2], [3], [4], [5]])
     def test_gaussian_peak_on_gridpoint(self, fwhm_size_multiple):
-        kernel = transform._gaussian_kernel(1.0, fwhm_size_multiple)
+        kernel = transforms._gaussian_kernel(1.0, fwhm_size_multiple)
         self.assertEqual(kernel[kernel.shape[0] // 2, kernel.shape[1] // 2], 1.0)

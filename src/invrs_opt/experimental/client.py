@@ -10,8 +10,8 @@ from typing import Any, Dict, Optional
 import requests
 from totypes import json_utils
 
-from invrs_opt import base
 from invrs_opt.experimental import labels
+from invrs_opt.optimizers import base
 
 PyTree = Any
 StateToken = str

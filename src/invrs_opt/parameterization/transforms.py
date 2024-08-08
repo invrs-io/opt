@@ -166,3 +166,116 @@ def _gaussian_kernel(fwhm: float, fwhm_size_multiple: float) -> jnp.ndarray:
     y = d[jnp.newaxis, :]
     sigma = fwhm / (2 * jnp.sqrt(2 * jnp.log(2)))
     return jnp.exp(-(x**2 + y**2) / (2 * sigma**2))
+
+
+def interface_pixels(phi: jnp.ndarray, periodic: Tuple[bool, bool]) -> jnp.ndarray:
+    """Identifies interface pixels of a level set function `phi`."""
+    batch_shape = phi.shape[:-2]
+    phi = phi.reshape((-1,) + phi.shape[-2:])
+
+    pad_mode = (
+        "wrap" if periodic[0] else "edge",
+        "wrap" if periodic[1] else "edge",
+    )
+    pad_width = ((1, 1), (1, 1))
+
+    kernel = jnp.asarray([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=jnp.float32)
+
+    solid = phi > 0
+    void = ~solid
+
+    solid_padded = pad2d(solid, pad_width, pad_mode)
+    num_solid_adjacent = conv(
+        x=solid_padded[:, jnp.newaxis, :, :].astype(float),
+        kernel=kernel[jnp.newaxis, jnp.newaxis, :, :],
+        padding="VALID",
+    )
+    num_solid_adjacent = jnp.squeeze(num_solid_adjacent, axis=1)
+
+    void_padded = pad2d(void, pad_width, pad_mode)
+    num_void_adjacent = conv(
+        x=void_padded[:, jnp.newaxis, :, :].astype(float),
+        kernel=kernel[jnp.newaxis, jnp.newaxis, :, :],
+        padding="VALID",
+    )
+    num_void_adjacent = jnp.squeeze(num_void_adjacent, axis=1)
+
+    interface = solid & (num_void_adjacent > 0) | void & (num_solid_adjacent > 0)
+
+    return interface.reshape(batch_shape + interface.shape[-2:])
+
+
+def downsample_spatial_dims(x: jnp.ndarray, downsample_factor: int) -> jnp.ndarray:
+    shape = x.shape[:-2] + (
+        x.shape[-2] // downsample_factor,
+        downsample_factor,
+        x.shape[-1] // downsample_factor,
+        downsample_factor,
+    )
+    x = x.reshape(shape)
+    return jnp.mean(x, axis=(-3, -1))
+
+
+def resample(
+    x: jnp.ndarray,
+    shape: Tuple[int, ...],
+    method: jax.image.ResizeMethod = jax.image.ResizeMethod.LINEAR,
+) -> jnp.ndarray:
+    """Resamples `x` to have the specified `shape`.
+
+    The algorithm first upsamples `x` so that the pixels in the output image are
+    comprised of an integer number of pixels in the upsampled `x`, and then
+    performs box downsampling.
+
+    Args:
+        x: The array to be resampled.
+        shape: The shape of the output array.
+        method: The method used to resize `x` prior to box downsampling.
+
+    Returns:
+        The resampled array.
+    """
+    if x.ndim != len(shape):
+        raise ValueError(
+            f"`shape` must have length matching number of dimensions in `x`, "
+            f"but got {shape} when `x` had shape {x.shape}."
+        )
+
+    with jax.ensure_compile_time_eval():
+        factor = [int(jnp.ceil(dx / d)) for dx, d in zip(x.shape, shape)]
+        upsampled_shape = tuple([d * f for d, f in zip(shape, factor)])
+
+    x_upsampled = jax.image.resize(
+        image=x,
+        shape=upsampled_shape,
+        method=method,
+    )
+
+    return box_downsample(x_upsampled, shape)
+
+
+def box_downsample(x: jnp.ndarray, shape: Tuple[int, ...]) -> jnp.ndarray:
+    """Downsamples `x` to a coarser resolution array using box downsampling.
+
+    Box downsampling forms nonoverlapping windows and simply averages the
+    pixels within each window. For example, downsampling `(0, 1, 2, 3, 4, 5)`
+    with a factor of `2` yields `(0.5, 2.5, 4.5)`.
+
+    Args:
+        x: The array to be downsampled.
+        shape: The shape of the output array; each axis dimension must evenly
+            divide the corresponding axis dimension in `x`.
+
+    Returns:
+        The output array with shape `shape`.
+    """
+    if x.ndim != len(shape) or any([(d % s) != 0 for d, s in zip(x.shape, shape)]):
+        raise ValueError(
+            f"Each axis of `shape` must evenly divide the corresponding axis "
+            f"dimension in `x`, but got shape {shape} when `x` has shape "
+            f"{x.shape}."
+        )
+    shape = sum([(s, d // s) for d, s in zip(x.shape, shape)], ())
+    axes = list(range(1, 2 * x.ndim, 2))
+    x = x.reshape(shape)
+    return jnp.mean(x, axis=axes)

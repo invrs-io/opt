@@ -13,7 +13,7 @@ from jax import flatten_util
 from parameterized import parameterized
 from totypes import types
 
-from invrs_opt.lbfgsb import lbfgsb
+from invrs_opt.optimizers import lbfgsb
 
 jax.config.update("jax_enable_x64", True)
 

@@ -5,7 +5,7 @@ Copyright (c) 2023 The INVRS-IO authors.
 
 import copy
 import dataclasses
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -16,7 +16,8 @@ from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
 )
 from totypes import types
 
-from invrs_opt import base, transform
+from invrs_opt import parameterization
+from invrs_opt.optimizers import base
 
 NDArray = onp.ndarray[Any, Any]
 PyTree = Any
@@ -56,7 +57,24 @@ def lbfgsb(
     ftol: float = FTOL_DEFAULT,
     gtol: float = GTOL_DEFAULT,
 ) -> base.Optimizer:
-    """Return an optimizer implementing the standard L-BFGS-B algorithm.
+    """"""
+    return parameterized_lbfgsb(
+        density_parameterization=None,
+        maxcor=maxcor,
+        line_search_max_steps=line_search_max_steps,
+        ftol=ftol,
+        gtol=gtol,
+    )
+
+
+def parameterized_lbfgsb(
+    density_parameterization: Optional[parameterization.base.Density2DParameterization],
+    maxcor: int = MAXCOR_DEFAULT,
+    line_search_max_steps: int = LINE_SEARCH_MAX_STEPS_DEFAULT,
+    ftol: float = FTOL_DEFAULT,
+    gtol: float = GTOL_DEFAULT,
+) -> base.Optimizer:
+    """Construct an L-BFGS-B optimizer with optional density parameterization.
 
     This optimizer wraps scipy's implementation of the algorithm, and provides
     a jax-style API to the scheme. The optimizer works with custom types such
@@ -85,120 +103,6 @@ def lbfgsb(
 
     While the algorithm can work with pytrees of jax arrays, numpy arrays can
     also be used. Thus, e.g. the optimizer can directly be used with autograd.
-
-    When the optimization has converged (according to `ftol` or `gtol` criteria), the
-    optimizer simply returns the parameters which obtained the converged result. The
-    convergence can be queried by `is_converged(state)`.
-
-    Args:
-        maxcor: The maximum number of variable metric corrections used to define
-            the limited memory matrix, in the L-BFGS-B scheme.
-        line_search_max_steps: The maximum number of steps in the line search.
-        ftol: Tolerance for stopping criteria based on function values. See scipy
-            documentation for details.
-        gtol: Tolerance for stopping criteria based on gradient.
-
-    Returns:
-        The `base.Optimizer`.
-    """
-    return transformed_lbfgsb(
-        maxcor=maxcor,
-        line_search_max_steps=line_search_max_steps,
-        ftol=ftol,
-        gtol=gtol,
-        transform_fn=lambda x: x,
-        initialize_latent_fn=lambda x: x,
-    )
-
-
-def density_lbfgsb(
-    beta: float,
-    maxcor: int = MAXCOR_DEFAULT,
-    line_search_max_steps: int = LINE_SEARCH_MAX_STEPS_DEFAULT,
-    ftol: float = FTOL_DEFAULT,
-    gtol: float = GTOL_DEFAULT,
-) -> base.Optimizer:
-    """Return an L-BFGS-B optimizer with additional transforms for density arrays.
-
-    Parameters that are of type `DensityArray2D` are represented as latent parameters
-    that are transformed (in the case where lower and upper bounds are `(-1, 1)`) by,
-
-        transformed = tanh(beta * conv(density.array, gaussian_kernel)) / tanh(beta)
-
-    where the kernel has a full-width at half-maximum determined by the minimum width
-    and spacing parameters of the `DensityArray2D`. Where the bounds differ, the
-    density is scaled before the transform is applied, and then unscaled afterwards.
-
-    When the optimization has converged (according to `ftol` or `gtol` criteria), the
-    optimizer simply returns the parameters which obtained the converged result. The
-    convergence can be queried by `is_converged(state)`.
-
-    Args:
-        beta: Determines the steepness of the thresholding.
-        maxcor: The maximum number of variable metric corrections used to define
-            the limited memory matrix, in the L-BFGS-B scheme.
-        line_search_max_steps: The maximum number of steps in the line search.
-        ftol: Tolerance for stopping criteria based on function values. See scipy
-            documentation for details.
-        gtol: Tolerance for stopping criteria based on gradient.
-
-    Returns:
-        The `base.Optimizer`.
-    """
-
-    def transform_fn(tree: PyTree) -> PyTree:
-        return tree_util.tree_map(
-            lambda x: transform_density(x) if _is_density(x) else x,
-            tree,
-            is_leaf=_is_density,
-        )
-
-    def initialize_latent_fn(tree: PyTree) -> PyTree:
-        return tree_util.tree_map(
-            lambda x: initialize_latent_density(x) if _is_density(x) else x,
-            tree,
-            is_leaf=_is_density,
-        )
-
-    def transform_density(density: types.Density2DArray) -> types.Density2DArray:
-        transformed = types.symmetrize_density(density)
-        transformed = transform.density_gaussian_filter_and_tanh(transformed, beta=beta)
-        # Scale to ensure that the full valid range of the density array is reachable.
-        mid_value = (density.lower_bound + density.upper_bound) / 2
-        transformed = tree_util.tree_map(
-            lambda array: mid_value + (array - mid_value) / jnp.tanh(beta), transformed
-        )
-        return transform.apply_fixed_pixels(transformed)
-
-    def initialize_latent_density(
-        density: types.Density2DArray,
-    ) -> types.Density2DArray:
-        array = transform.normalized_array_from_density(density)
-        array = jnp.clip(array, -1, 1)
-        array *= jnp.tanh(beta)
-        latent_array = jnp.arctanh(array) / beta
-        latent_array = transform.rescale_array_for_density(latent_array, density)
-        return dataclasses.replace(density, array=latent_array)
-
-    return transformed_lbfgsb(
-        maxcor=maxcor,
-        line_search_max_steps=line_search_max_steps,
-        ftol=ftol,
-        gtol=gtol,
-        transform_fn=transform_fn,
-        initialize_latent_fn=initialize_latent_fn,
-    )
-
-
-def transformed_lbfgsb(
-    maxcor: int,
-    line_search_max_steps: int,
-    ftol: float,
-    gtol: float,
-    transform_fn: Callable[[PyTree], PyTree],
-    initialize_latent_fn: Callable[[PyTree], PyTree],
-) -> base.Optimizer:
-    """Construct an latent parameter L-BFGS-B optimizer.
 
     The optimized parameters are termed latent parameters, from which the
     actual parameters returned by the optimizer are obtained using the
@@ -236,33 +140,53 @@ def transformed_lbfgsb(
             f"{line_search_max_steps}"
         )
 
+    if density_parameterization is None:
+        density_parameterization = parameterization.pixel()
+
+    def _init_latents(params: PyTree) -> PyTree:
+        def _leaf_init_latents(leaf: Any) -> Any:
+            leaf = _clip(leaf)
+            if not _is_density(leaf) or density_parameterization is None:
+                return leaf
+            return density_parameterization.from_density(leaf)
+
+        return tree_util.tree_map(_leaf_init_latents, params, is_leaf=_is_custom_type)
+
+    def _params_from_latents(params: PyTree) -> PyTree:
+        def _leaf_params_from_latents(leaf: Any) -> Any:
+            if not _is_parameterized_density(leaf) or density_parameterization is None:
+                return leaf
+            return density_parameterization.to_density(leaf)
+
+        return tree_util.tree_map(
+            _leaf_params_from_latents,
+            params,
+            is_leaf=_is_parameterized_density,
+        )
+
     def init_fn(params: PyTree) -> LbfgsbState:
         """Initializes the optimization state."""
 
-        def _init_pure(params: PyTree) -> Tuple[PyTree, JaxLbfgsbDict]:
-            lower_bound = types.extract_lower_bound(params)
-            upper_bound = types.extract_upper_bound(params)
+        def _init_state_pure(latent_params: PyTree) -> Tuple[PyTree, JaxLbfgsbDict]:
+            lower_bound = types.extract_lower_bound(latent_params)
+            upper_bound = types.extract_upper_bound(latent_params)
             scipy_lbfgsb_state = ScipyLbfgsbState.init(
-                x0=_to_numpy(params),
-                lower_bound=_bound_for_params(lower_bound, params),
-                upper_bound=_bound_for_params(upper_bound, params),
+                x0=_to_numpy(latent_params),
+                lower_bound=_bound_for_params(lower_bound, latent_params),
+                upper_bound=_bound_for_params(upper_bound, latent_params),
                 maxcor=maxcor,
                 line_search_max_steps=line_search_max_steps,
                 ftol=ftol,
                 gtol=gtol,
             )
-            latent_params = _to_pytree(scipy_lbfgsb_state.x, params)
+            latent_params = _to_pytree(scipy_lbfgsb_state.x, latent_params)
             return latent_params, scipy_lbfgsb_state.to_jax()
 
-        (
-            latent_params,
-            jax_lbfgsb_state,
-        ) = jax.pure_callback(
-            _init_pure,
-            _example_state(params, maxcor),
-            initialize_latent_fn(params),
+        latent_params = _init_latents(params)
+        latent_params, jax_lbfgsb_state = jax.pure_callback(
+            _init_state_pure, _example_state(latent_params, maxcor), latent_params
         )
-        return transform_fn(latent_params), latent_params, jax_lbfgsb_state
+        return _params_from_latents(latent_params), latent_params, jax_lbfgsb_state
 
     def params_fn(state: LbfgsbState) -> PyTree:
         """Returns the parameters for the given `state`."""
@@ -294,16 +218,13 @@ def transformed_lbfgsb(
             return flat_latent_params, scipy_lbfgsb_state.to_jax()
 
         _, latent_params, jax_lbfgsb_state = state
-        _, vjp_fn = jax.vjp(transform_fn, latent_params)
+        _, vjp_fn = jax.vjp(_params_from_latents, latent_params)
         (latent_grad,) = vjp_fn(grad)
         flat_latent_grad, unflatten_fn = flatten_util.ravel_pytree(
             latent_grad
         )  # type: ignore[no-untyped-call]
 
-        (
-            flat_latent_params,
-            jax_lbfgsb_state,
-        ) = jax.pure_callback(
+        flat_latent_params, jax_lbfgsb_state = jax.pure_callback(
             _update_pure,
             (flat_latent_grad, jax_lbfgsb_state),
             flat_latent_grad,
@@ -311,7 +232,7 @@ def transformed_lbfgsb(
             jax_lbfgsb_state,
         )
         latent_params = unflatten_fn(flat_latent_params)
-        return transform_fn(latent_params), latent_params, jax_lbfgsb_state
+        return _params_from_latents(latent_params), latent_params, jax_lbfgsb_state
 
     return base.Optimizer(
         init=init_fn,
@@ -333,6 +254,31 @@ def is_converged(state: LbfgsbState) -> jnp.ndarray:
 def _is_density(leaf: Any) -> Any:
     """Return `True` if `leaf` is a density array."""
     return isinstance(leaf, types.Density2DArray)
+
+
+def _is_parameterized_density(leaf: Any) -> Any:
+    """Return `True` if `leaf` is a parameterized density array."""
+    return isinstance(leaf, parameterization.base.ParameterizedDensity2DArrayBase)
+
+
+def _is_custom_type(leaf: Any) -> bool:
+    """Return `True` if `leaf` is a recognized custom type."""
+    return isinstance(leaf, (types.BoundedArray, types.Density2DArray))
+
+
+def _clip(pytree: PyTree) -> PyTree:
+    """Clips leaves on `pytree` to their bounds."""
+
+    def _clip_fn(leaf: Any) -> Any:
+        if not _is_custom_type(leaf):
+            return leaf
+        if leaf.lower_bound is None and leaf.upper_bound is None:
+            return leaf
+        return tree_util.tree_map(
+            lambda x: jnp.clip(x, leaf.lower_bound, leaf.upper_bound), leaf
+        )
+
+    return tree_util.tree_map(_clip_fn, pytree, is_leaf=_is_custom_type)
 
 
 def _to_numpy(params: PyTree) -> NDArray:
