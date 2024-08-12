@@ -10,14 +10,20 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union
 import jax
 import jax.numpy as jnp
 import numpy as onp
+import optax  # type: ignore[import-untyped]
 from jax import flatten_util, tree_util
 from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
     _lbfgsb as scipy_lbfgsb,
 )
 from totypes import types
 
-from invrs_opt import parameterization
 from invrs_opt.optimizers import base
+from invrs_opt.parameterization import (
+    base as parameterization_base,
+    filter_project,
+    gaussian_levelset,
+    pixel,
+)
 
 NDArray = onp.ndarray[Any, Any]
 PyTree = Any
@@ -35,10 +41,10 @@ UPDATE_IPRINT = -1
 
 # Maximum value for the `maxcor` parameter in the L-BFGS-B scheme.
 MAXCOR_MAX_VALUE = 100
-MAXCOR_DEFAULT = 20
-LINE_SEARCH_MAX_STEPS_DEFAULT = 100
-FTOL_DEFAULT = 0.0
-GTOL_DEFAULT = 0.0
+DEFAULT_MAXCOR = 20
+DEFAULT_LINE_SEARCH_MAX_STEPS = 100
+DEFAULT_FTOL = 0.0
+DEFAULT_GTOL = 0.0
 
 # Maps bound scenarios to integers.
 BOUNDS_MAP: Dict[Tuple[bool, bool], int] = {
@@ -52,14 +58,36 @@ FORTRAN_INT = scipy_lbfgsb.types.intvar.dtype
 
 
 def lbfgsb(
-    maxcor: int = MAXCOR_DEFAULT,
-    line_search_max_steps: int = LINE_SEARCH_MAX_STEPS_DEFAULT,
-    ftol: float = FTOL_DEFAULT,
-    gtol: float = GTOL_DEFAULT,
+    *,
+    maxcor: int = DEFAULT_MAXCOR,
+    line_search_max_steps: int = DEFAULT_LINE_SEARCH_MAX_STEPS,
+    ftol: float = DEFAULT_FTOL,
+    gtol: float = DEFAULT_GTOL,
 ) -> base.Optimizer:
-    """"""
+    """Optimizer implementing the standard L-BFGS-B algorithm.
+
+    The standard L-BFGS-B algorithm uses the direct pixel parameterization for density
+    arrays, which simply enforces that values are between the declared upper and lower
+    bounds of the density.
+
+    When an optimization is determined to have converged (by `ftol` or `gtol` criteria)
+    the optimizer `params` function will simply return the optimal parameters. The
+    convergence can be queried by `is_converged(state)`.
+
+    Args:
+        maxcor: The maximum number of variable metric corrections used to define the
+            limited memory matrix, in the L-BFGS-B scheme.
+        line_search_max_steps: The maximum number of steps in the line search.
+        ftol: Convergence criteria based on function values. See scipy documentation
+            for details.
+        gtol: Convergence criteria based on gradient.
+
+    Returns:
+        The `Optimizer` implementing the L-BFGS-B optimizer.
+    """
     return parameterized_lbfgsb(
         density_parameterization=None,
+        penalty=0.0,
         maxcor=maxcor,
         line_search_max_steps=line_search_max_steps,
         ftol=ftol,
@@ -67,63 +95,188 @@ def lbfgsb(
     )
 
 
-def parameterized_lbfgsb(
-    density_parameterization: Optional[parameterization.base.Density2DParameterization],
-    maxcor: int = MAXCOR_DEFAULT,
-    line_search_max_steps: int = LINE_SEARCH_MAX_STEPS_DEFAULT,
-    ftol: float = FTOL_DEFAULT,
-    gtol: float = GTOL_DEFAULT,
+def density_lbfgsb(
+    *,
+    beta: float,
+    maxcor: int = DEFAULT_MAXCOR,
+    line_search_max_steps: int = DEFAULT_LINE_SEARCH_MAX_STEPS,
+    ftol: float = DEFAULT_FTOL,
+    gtol: float = DEFAULT_GTOL,
 ) -> base.Optimizer:
-    """Construct an L-BFGS-B optimizer with optional density parameterization.
+    """Optimizer using L-BFGS-B algorithm with filter-project density parameterization.
+
+    In the filter-project density parameterization, the optimization variable
+    associated with a density array is a latent density array; the density is obtained
+    by convolving (i.e. "filtering") the latent density with a Gaussian kernel having
+    full-width at half-maximum equal to the length scale (the mean of declared minimum
+    width and minimum spacing). Then, a tanh nonlinearity is used as a smooth threshold
+    operation ("projection").
+
+    When an optimization is determined to have converged (by `ftol` or `gtol` criteria)
+    the optimizer `params` function will simply return the optimal parameters. The
+    convergence can be queried by `is_converged(state)`.
+
+    Args:
+        beta: Determines the sharpness of the thresholding operation.
+        maxcor: The maximum number of variable metric corrections used to define the
+            limited memory matrix, in the L-BFGS-B scheme.
+        line_search_max_steps: The maximum number of steps in the line search.
+        ftol: Convergence criteria based on function values. See scipy documentation
+            for details.
+        gtol: Convergence criteria based on gradient.
+
+    Returns:
+        The `Optimizer` implementing the L-BFGS-B optimizer.
+    """
+    return parameterized_lbfgsb(
+        density_parameterization=filter_project.filter_project(beta=beta),
+        penalty=0.0,
+        maxcor=maxcor,
+        line_search_max_steps=line_search_max_steps,
+        ftol=ftol,
+        gtol=gtol,
+    )
+
+
+def levelset_lbfgsb(
+    *,
+    penalty: float,
+    length_scale_spacing_factor: float = (
+        gaussian_levelset.DEFAULT_LENGTH_SCALE_SPACING_FACTOR
+    ),
+    length_scale_fwhm_factor: float = (
+        gaussian_levelset.DEFAULT_LENGTH_SCALE_FWHM_FACTOR
+    ),
+    length_scale_constraint_factor: float = (
+        gaussian_levelset.DEFAULT_LENGTH_SCALE_CONSTRAINT_FACTOR
+    ),
+    smoothing_factor: int = gaussian_levelset.DEFAULT_SMOOTHING_FACTOR,
+    length_scale_constraint_beta: float = (
+        gaussian_levelset.DEFAULT_LENGTH_SCALE_CONSTRAINT_BETA
+    ),
+    length_scale_constraint_weight: float = (
+        gaussian_levelset.DEFAULT_LENGTH_SCALE_CONSTRAINT_WEIGHT
+    ),
+    curvature_constraint_weight: float = (
+        gaussian_levelset.DEFAULT_CURVATURE_CONSTRAINT_WEIGHT
+    ),
+    fixed_pixel_constraint_weight: float = (
+        gaussian_levelset.DEFAULT_FIXED_PIXEL_CONSTRAINT_WEIGHT
+    ),
+    init_optimizer: optax.GradientTransformation = (
+        gaussian_levelset.DEFAULT_INIT_OPTIMIZER
+    ),
+    init_steps: int = gaussian_levelset.DEFAULT_INIT_STEPS,
+    maxcor: int = DEFAULT_MAXCOR,
+    line_search_max_steps: int = DEFAULT_LINE_SEARCH_MAX_STEPS,
+    ftol: float = DEFAULT_FTOL,
+    gtol: float = DEFAULT_GTOL,
+) -> base.Optimizer:
+    """Optimizer using L-BFGS-B algorithm with levelset density parameterization.
+
+    In the levelset parameterization, the optimization variable associated with a
+    density array is an array giving the amplitudes of Gaussian radial basis functions
+    that represent a levelset function over the domain of the density. In the levelset
+    parameterization, gradients are nonzero only at the edges of features, and in
+    general the topology of a solution does not change during the course of
+    optimization.
+
+    The spacing and full-width at half-maximum of the Gaussian basis functions gives
+    some amount of control over length scales. In addition, constraints associated with
+    length scale, radius of curvature, and deviation from fixed pixels are
+    automatically computed and penalized with a weight given by `penalty`. In general,
+    this helps ensure that features in an optimized density array violate the specified
+    constraints to a lesser degree. The constraints are based on "Analytical level set
+    fabrication constraints for inverse design," by D. Vercruysse et al. (2019).
+
+    When an optimization is determined to have converged (by `ftol` or `gtol` criteria)
+    the optimizer `params` function will simply return the optimal parameters. The
+    convergence can be queried by `is_converged(state)`.
+
+    Args:
+        penalty: The weight of the fabrication penalty, which combines length scale,
+            curvature, and fixed pixel constraints.
+        length_scale_spacing_factor: The number of levelset control points per unit of
+            minimum length scale (mean of density minimum width and minimum spacing).
+        length_scale_fwhm_factor: The ratio of Gaussian full-width at half-maximum to
+            the minimum length scale.
+        length_scale_constraint_factor: Multiplies the target length scale in the
+            levelset constraints. A value greater than 1 is pessimistic and drives the
+            solution to have a larger length scale (relative to smaller values).
+        smoothing_factor: For values greater than 1, the density is initially computed
+            at higher resolution and then downsampled, yielding smoother geometries.
+        length_scale_constraint_beta: Controls relaxation of the length scale
+            constraint near the zero level.
+        length_scale_constraint_weight: The weight of the length scale constraint in
+            the overall fabrication constraint peenalty.
+        curvature_constraint_weight: The weight of the curvature constraint.
+        fixed_pixel_constraint_weight: The weight of the fixed pixel constraint.
+        init_optimizer: The optimizer used in the initialization of the levelset
+            parameterization. At initialization, the latent parameters are optimized so
+            that the initial parameters match the binarized initial density.
+        init_steps: The number of optimization steps used in the initialization.
+        maxcor: The maximum number of variable metric corrections used to define the
+            limited memory matrix, in the L-BFGS-B scheme.
+        line_search_max_steps: The maximum number of steps in the line search.
+        ftol: Convergence criteria based on function values. See scipy documentation
+            for details.
+        gtol: Convergence criteria based on gradient.
+
+    Returns:
+        The `Optimizer` implementing the L-BFGS-B optimizer.
+    """
+    return parameterized_lbfgsb(
+        density_parameterization=gaussian_levelset.gaussian_levelset(
+            length_scale_spacing_factor=length_scale_spacing_factor,
+            length_scale_fwhm_factor=length_scale_fwhm_factor,
+            length_scale_constraint_factor=length_scale_constraint_factor,
+            smoothing_factor=smoothing_factor,
+            length_scale_constraint_beta=length_scale_constraint_beta,
+            length_scale_constraint_weight=length_scale_constraint_weight,
+            curvature_constraint_weight=curvature_constraint_weight,
+            fixed_pixel_constraint_weight=fixed_pixel_constraint_weight,
+            init_optimizer=init_optimizer,
+            init_steps=init_steps,
+        ),
+        penalty=penalty,
+        maxcor=maxcor,
+        line_search_max_steps=line_search_max_steps,
+        ftol=ftol,
+        gtol=gtol,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Base parameterized L-BFGS-B optimizer.
+# -----------------------------------------------------------------------------
+
+
+def parameterized_lbfgsb(
+    density_parameterization: Optional[parameterization_base.Density2DParameterization],
+    penalty: float,
+    maxcor: int = DEFAULT_MAXCOR,
+    line_search_max_steps: int = DEFAULT_LINE_SEARCH_MAX_STEPS,
+    ftol: float = DEFAULT_FTOL,
+    gtol: float = DEFAULT_GTOL,
+) -> base.Optimizer:
+    """Optimizer using L-BFGS-B optimizer with specified density parameterization.
 
     This optimizer wraps scipy's implementation of the algorithm, and provides
     a jax-style API to the scheme. The optimizer works with custom types such
     as the `BoundedArray` to constrain the optimization variable.
 
-    Example usage is as follows:
-
-        def fn(x):
-            leaves_sum_sq = [jnp.sum(y)**2 for y in tree_util.tree_leaves(x)]
-            return jnp.sum(jnp.asarray(leaves_sum_sq))
-
-        x0 = {
-            "a": jnp.ones((3,)),
-            "b": BoundedArray(
-                value=-jnp.ones((2, 5)),
-                lower_bound=-5,
-                upper_bound=5,
-            ),
-        }
-        opt = lbfgsb(maxcor=20, line_search_max_steps=100)
-        state = opt.init(x0)
-        for _ in range(10):
-            x = opt.params(state)
-            value, grad = jax.value_and_grad(fn)(x)
-            state = opt.update(grad, value, state)
-
-    While the algorithm can work with pytrees of jax arrays, numpy arrays can
-    also be used. Thus, e.g. the optimizer can directly be used with autograd.
-
-    The optimized parameters are termed latent parameters, from which the
-    actual parameters returned by the optimizer are obtained using the
-    `transform_fn`. In the simple case where this is just `lambda x: x` (i.e.
-    the identity), this is equivalent to the standard L-BFGS-B algorithm.
-
-    When the optimization has converged (according to `ftol` or `gtol` criteria), the
-    optimizer simply returns the parameters which obtained the converged result. The
-    convergence can be queried by `is_converged(state)`.
-
     Args:
-        maxcor: The maximum number of variable metric corrections used to define
-            the limited memory matrix, in the L-BFGS-B scheme.
+        density_parameterization: The parameterization to be used, or `None`. When no
+            parameterization is given, the direct pixel parameterization is used for
+            density arrays.
+        penalty: The weight of the scalar penalty formed from the constraints of the
+            parameterization.
+        maxcor: The maximum number of variable metric corrections used to define the
+            limited memory matrix, in the L-BFGS-B scheme.
         line_search_max_steps: The maximum number of steps in the line search.
-        ftol: Tolerance for stopping criteria based on function values. See scipy
-            documentation for details.
-        gtol: Tolerance for stopping criteria based on gradient.
-        transform_fn: Function which transforms the internal latent parameters to
-            the parameters returned by the optimizer.
-        initialize_latent_fn: Function which computes the initial latent parameters
-            given the initial parameters.
+        ftol: Convergence criteria based on function values. See scipy documentation
+            for details.
+        gtol: Convergence criteria based on gradient.
 
     Returns:
         The `base.Optimizer`.
@@ -141,7 +294,7 @@ def parameterized_lbfgsb(
         )
 
     if density_parameterization is None:
-        density_parameterization = parameterization.pixel()
+        density_parameterization = pixel.pixel()
 
     def _init_latents(params: PyTree) -> PyTree:
         def _leaf_init_latents(leaf: Any) -> Any:
@@ -152,7 +305,7 @@ def parameterized_lbfgsb(
 
         return tree_util.tree_map(_leaf_init_latents, params, is_leaf=_is_custom_type)
 
-    def _params_from_latents(params: PyTree) -> PyTree:
+    def _params_from_latents(latent_params: PyTree) -> PyTree:
         def _leaf_params_from_latents(leaf: Any) -> Any:
             if not _is_parameterized_density(leaf) or density_parameterization is None:
                 return leaf
@@ -160,9 +313,29 @@ def parameterized_lbfgsb(
 
         return tree_util.tree_map(
             _leaf_params_from_latents,
-            params,
+            latent_params,
             is_leaf=_is_parameterized_density,
         )
+
+    def _constraint_loss(latent_params: PyTree) -> jnp.ndarray:
+        def _constraint_loss_leaf(
+            params: parameterization_base.ParameterizedDensity2DArrayBase,
+        ) -> jnp.ndarray:
+            constraints = density_parameterization.constraints(params)
+            constraints = tree_util.tree_map(
+                lambda x: jnp.sum(jnp.maximum(x, 0.0)),
+                constraints,
+            )
+            return jnp.sum(jnp.asarray(constraints) ** 2)
+
+        losses = [0.0] + [
+            _constraint_loss_leaf(p)
+            for p in tree_util.tree_leaves(
+                latent_params, is_leaf=_is_parameterized_density
+            )
+            if _is_parameterized_density(p)
+        ]
+        return penalty * jnp.sum(jnp.asarray(losses))
 
     def init_fn(params: PyTree) -> LbfgsbState:
         """Initializes the optimization state."""
@@ -220,6 +393,28 @@ def parameterized_lbfgsb(
         _, latent_params, jax_lbfgsb_state = state
         _, vjp_fn = jax.vjp(_params_from_latents, latent_params)
         (latent_grad,) = vjp_fn(grad)
+
+        if not (
+            tree_util.tree_structure(latent_grad)
+            == tree_util.tree_structure(latent_params)  # type: ignore[operator]
+        ):
+            raise ValueError(
+                f"Tree structure of `latent_grad` was different than expected, got \n"
+                f"{tree_util.tree_structure(latent_grad)} but expected \n"
+                f"{tree_util.tree_structure(latent_params)}."
+            )
+
+        (
+            constraint_loss_value,
+            constraint_loss_grad,
+        ) = jax.value_and_grad(
+            _constraint_loss
+        )(latent_params)
+        value += constraint_loss_value
+        latent_grad = tree_util.tree_map(
+            lambda a, b: a + b, latent_grad, constraint_loss_grad
+        )
+
         flat_latent_grad, unflatten_fn = flatten_util.ravel_pytree(
             latent_grad
         )  # type: ignore[no-untyped-call]
@@ -258,7 +453,7 @@ def _is_density(leaf: Any) -> Any:
 
 def _is_parameterized_density(leaf: Any) -> Any:
     """Return `True` if `leaf` is a parameterized density array."""
-    return isinstance(leaf, parameterization.base.ParameterizedDensity2DArrayBase)
+    return isinstance(leaf, parameterization_base.ParameterizedDensity2DArrayBase)
 
 
 def _is_custom_type(leaf: Any) -> bool:

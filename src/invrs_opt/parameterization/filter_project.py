@@ -7,14 +7,19 @@ import dataclasses
 
 import jax.numpy as jnp
 from jax import tree_util
-from totypes import types
+from totypes import json_utils, types
 
 from invrs_opt.parameterization import base, transforms
 
 
 @dataclasses.dataclass
 class FilterAndProjectParams(base.ParameterizedDensity2DArrayBase):
-    """Stores the latent parameters of the pixel parameterization."""
+    """Stores the latent parameters of the pixel parameterization.
+
+    Attributes:
+        latent_density: The latent variable from which the density is obtained.
+        beta: Determines the sharpness of the thresholding operation.
+    """
 
     latent_density: types.Density2DArray
     beta: float
@@ -22,25 +27,29 @@ class FilterAndProjectParams(base.ParameterizedDensity2DArrayBase):
 
 tree_util.register_dataclass(
     FilterAndProjectParams,
-    data_fields=["array"],
+    data_fields=["latent_density"],
     meta_fields=["beta"],
 )
 
+json_utils.register_custom_type(FilterAndProjectParams)
 
-def filter_and_project(beta: float = 2.0) -> base.Density2DParameterization:
-    """Defines a filter-and-project parameterization for density arrays.
 
-    The `DensityArray2D` is represented as latent density array that is transformed
-    (in the case where lower and upper bounds are `(-1, 1)`) by,
+def filter_project(beta: float) -> base.Density2DParameterization:
+    """Defines a filter-project parameterization for density arrays.
+
+    The `DensityArray2D` is represented as latent density array that is transformed by,
 
         transformed = tanh(beta * conv(density.array, gaussian_kernel)) / tanh(beta)
 
     where the kernel has a full-width at half-maximum determined by the minimum width
-    and spacing parameters of the `DensityArray2D`. Where the bounds differ, the
-    density is scaled before the transform is applied, and then unscaled afterwards.
+    and spacing parameters of the `DensityArray2D`.
+
+    When the density lower and upper bounds are -1 and +1, this basic expression is
+    Where the bounds differ, the density is scaled before the transform is applied, and
+    then unscaled afterwards.
 
     Args:
-        beta: Determines the sharpness of the thresholding function.
+        beta: Determines the sharpness of the thresholding operation.
 
     Returns:
         The `Density2DParameterization`.

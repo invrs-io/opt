@@ -6,7 +6,8 @@ Copyright (c) 2023 The INVRS-IO authors.
 import dataclasses
 
 import jax.numpy as jnp
-from totypes import types
+from jax import tree_util
+from totypes import json_utils, types
 
 from invrs_opt.parameterization import base
 
@@ -16,6 +17,12 @@ class PixelParams(base.ParameterizedDensity2DArrayBase):
     """Stores latent parameters of the direct pixel parameterization."""
 
     density: types.Density2DArray
+
+
+tree_util.register_dataclass(PixelParams, data_fields=["density"], meta_fields=[])
+
+
+json_utils.register_custom_type(PixelParams)
 
 
 def pixel() -> base.Density2DParameterization:

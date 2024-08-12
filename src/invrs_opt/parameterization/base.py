@@ -9,7 +9,7 @@ from typing import Any, Optional, Protocol, Sequence, Tuple
 import jax.numpy as jnp
 import numpy as onp
 from jax import tree_util
-from totypes import types
+from totypes import json_utils, types
 
 Array = jnp.ndarray | onp.ndarray[Any, Any]
 PyTree = Any
@@ -65,6 +65,10 @@ class Density2DMetadata:
     minimum_spacing: int
     periodic: Sequence[bool]
     symmetries: Sequence[str]
+
+    def __post_init__(self) -> None:
+        self.periodic = tuple(self.periodic)
+        self.symmetries = tuple(self.symmetries)
 
 
 def _flatten_density_2d_metadata(
@@ -140,3 +144,5 @@ tree_util.register_pytree_node(
     flatten_func=_flatten_density_2d_metadata,
     unflatten_func=_unflatten_density_2d_metadata,
 )
+
+json_utils.register_custom_type(Density2DMetadata)

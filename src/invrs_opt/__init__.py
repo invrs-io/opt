@@ -7,7 +7,15 @@ __version__ = "v0.6.0"
 __author__ = "Martin F. Schubert <mfschubert@gmail.com>"
 
 from invrs_opt import parameterization as parameterization
-from invrs_opt.optimizers.lbfgsb import parameterized_lbfgsb as parameterized_lbfgsb
+
+from invrs_opt.optimizers.lbfgsb import (
+    density_lbfgsb as density_lbfgsb,
+    lbfgsb as lbfgsb,
+    levelset_lbfgsb as levelset_lbfgsb,
+)
+
 from invrs_opt.optimizers.wrapped_optax import (
-    parameterized_wrapped_optax as parameterized_wrapped_optax,
+    density_wrapped_optax as density_wrapped_optax,
+    levelset_wrapped_optax as levelset_wrapped_optax,
+    wrapped_optax as wrapped_optax,
 )

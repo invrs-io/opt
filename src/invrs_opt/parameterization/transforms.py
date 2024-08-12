@@ -62,6 +62,20 @@ def density_gaussian_filter_and_tanh(
     return transformed_density
 
 
+def _gaussian_kernel(fwhm: float, fwhm_size_multiple: float) -> jnp.ndarray:
+    """Returns a Gaussian kernel with the specified full-width at half-maximum."""
+    with jax.ensure_compile_time_eval():
+        kernel_size = max(1, int(jnp.ceil(fwhm * fwhm_size_multiple)))
+    # Ensure the kernel size is odd, so that there is always a central pixel which will
+    # contain the peak value of the Gaussian.
+    kernel_size += (kernel_size + 1) % 2
+    d = jnp.arange(0.5, kernel_size) - kernel_size / 2
+    x = d[:, jnp.newaxis]
+    y = d[jnp.newaxis, :]
+    sigma = fwhm / (2 * jnp.sqrt(2 * jnp.log(2)))
+    return jnp.exp(-(x**2 + y**2) / (2 * sigma**2))
+
+
 def normalized_array_from_density(density: types.Density2DArray) -> jnp.ndarray:
     """Returns an array with values scaled to the range `(-1, 1)`."""
     value_mid = (density.upper_bound + density.lower_bound) / 2
@@ -152,68 +166,6 @@ def _pad_mode_for_density(density: types.Density2DArray) -> Union[str, Tuple[str
         "wrap" if density.periodic[0] else "edge",
         "wrap" if density.periodic[1] else "edge",
     )
-
-
-def _gaussian_kernel(fwhm: float, fwhm_size_multiple: float) -> jnp.ndarray:
-    """Returns a Gaussian kernel with the specified full-width at half-maximum."""
-    with jax.ensure_compile_time_eval():
-        kernel_size = max(1, int(jnp.ceil(fwhm * fwhm_size_multiple)))
-    # Ensure the kernel size is odd, so that there is always a central pixel which will
-    # contain the peak value of the Gaussian.
-    kernel_size += (kernel_size + 1) % 2
-    d = jnp.arange(0.5, kernel_size) - kernel_size / 2
-    x = d[:, jnp.newaxis]
-    y = d[jnp.newaxis, :]
-    sigma = fwhm / (2 * jnp.sqrt(2 * jnp.log(2)))
-    return jnp.exp(-(x**2 + y**2) / (2 * sigma**2))
-
-
-def interface_pixels(phi: jnp.ndarray, periodic: Tuple[bool, bool]) -> jnp.ndarray:
-    """Identifies interface pixels of a level set function `phi`."""
-    batch_shape = phi.shape[:-2]
-    phi = phi.reshape((-1,) + phi.shape[-2:])
-
-    pad_mode = (
-        "wrap" if periodic[0] else "edge",
-        "wrap" if periodic[1] else "edge",
-    )
-    pad_width = ((1, 1), (1, 1))
-
-    kernel = jnp.asarray([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=jnp.float32)
-
-    solid = phi > 0
-    void = ~solid
-
-    solid_padded = pad2d(solid, pad_width, pad_mode)
-    num_solid_adjacent = conv(
-        x=solid_padded[:, jnp.newaxis, :, :].astype(float),
-        kernel=kernel[jnp.newaxis, jnp.newaxis, :, :],
-        padding="VALID",
-    )
-    num_solid_adjacent = jnp.squeeze(num_solid_adjacent, axis=1)
-
-    void_padded = pad2d(void, pad_width, pad_mode)
-    num_void_adjacent = conv(
-        x=void_padded[:, jnp.newaxis, :, :].astype(float),
-        kernel=kernel[jnp.newaxis, jnp.newaxis, :, :],
-        padding="VALID",
-    )
-    num_void_adjacent = jnp.squeeze(num_void_adjacent, axis=1)
-
-    interface = solid & (num_void_adjacent > 0) | void & (num_solid_adjacent > 0)
-
-    return interface.reshape(batch_shape + interface.shape[-2:])
-
-
-def downsample_spatial_dims(x: jnp.ndarray, downsample_factor: int) -> jnp.ndarray:
-    shape = x.shape[:-2] + (
-        x.shape[-2] // downsample_factor,
-        downsample_factor,
-        x.shape[-1] // downsample_factor,
-        downsample_factor,
-    )
-    x = x.reshape(shape)
-    return jnp.mean(x, axis=(-3, -1))
 
 
 def resample(
