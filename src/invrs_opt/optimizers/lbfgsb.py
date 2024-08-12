@@ -326,7 +326,7 @@ def parameterized_lbfgsb(
                 lambda x: jnp.sum(jnp.maximum(x, 0.0)),
                 constraints,
             )
-            return jnp.sum(jnp.asarray(constraints) ** 2)
+            return jnp.sum(jnp.asarray(constraints))
 
         losses = [0.0] + [
             _constraint_loss_leaf(p)
