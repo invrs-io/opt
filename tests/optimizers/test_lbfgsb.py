@@ -13,7 +13,7 @@ from jax import flatten_util
 from parameterized import parameterized
 from totypes import types
 
-from invrs_opt.lbfgsb import lbfgsb
+from invrs_opt.optimizers import lbfgsb
 
 jax.config.update("jax_enable_x64", True)
 
@@ -29,7 +29,7 @@ class DensityLbfgsbBoundsTest(unittest.TestCase):
             lower_bound=lower_bound,
             upper_bound=upper_bound,
         )
-        opt = lbfgsb.density_lbfgsb(beta=2)
+        opt = lbfgsb.density_lbfgsb(beta=2.0)
         state = opt.init(params)
         for _ in range(10):
             params = opt.params(state)

@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 import optax
-import parameterized
+from parameterized import parameterized
 from totypes import json_utils, symmetry, types
 
 import invrs_opt
@@ -20,10 +20,12 @@ jax.config.update("jax_enable_x64", True)
 
 # Optimizers tested in this module.
 OPTIMIZERS = [
-    invrs_opt.lbfgsb(maxcor=20, line_search_max_steps=100),
-    invrs_opt.density_lbfgsb(maxcor=20, line_search_max_steps=100, beta=2.0),
+    invrs_opt.lbfgsb(),
+    invrs_opt.density_lbfgsb(beta=2.0),
+    invrs_opt.levelset_lbfgsb(penalty=1.0),
     invrs_opt.wrapped_optax(optax.adam(1e-2)),
     invrs_opt.density_wrapped_optax(optax.adam(1e-2), beta=2.0),
+    invrs_opt.levelset_wrapped_optax(optax.adam(1e-2), penalty=1.0),
 ]
 
 # Various parameter combinations tested in this module.
@@ -165,7 +167,7 @@ def deserialize(serialized):
 
 
 class BasicOptimizerTest(unittest.TestCase):
-    @parameterized.parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
+    @parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
     def test_state_is_serializable(self, params, opt):
         state = opt.init(params)
         leaves, treedef = jax.tree_util.tree_flatten(state)
@@ -182,7 +184,7 @@ class BasicOptimizerTest(unittest.TestCase):
         for a, b in zip(leaves, restored_leaves):
             onp.testing.assert_array_equal(a, b)
 
-    @parameterized.parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
+    @parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
     def test_optimize(self, initial_params, opt):
         def loss_fn(params):
             leaves = jax.tree_util.tree_leaves(params)
@@ -201,7 +203,7 @@ class BasicOptimizerTest(unittest.TestCase):
         # preserved by optimization.
         self.assertEqual(treedef, initial_treedef)
 
-    @parameterized.parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
+    @parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
     def test_optimize_with_serialization(self, initial_params, opt):
         def loss_fn(params):
             leaves = jax.tree_util.tree_leaves(params)

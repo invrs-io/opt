@@ -14,8 +14,8 @@ from jax import flatten_util, tree_util
 from parameterized import parameterized
 from totypes import types
 
-from invrs_opt import transform
-from invrs_opt.wrapped_optax import wrapped_optax
+from invrs_opt.parameterization import transforms
+from invrs_opt.optimizers import wrapped_optax
 
 
 class DensityWrappedOptaxBoundsTest(unittest.TestCase):
@@ -174,7 +174,7 @@ class WrappedOptaxTest(unittest.TestCase):
 
         def transform_density(density):
             transformed = types.symmetrize_density(density)
-            transformed = transform.density_gaussian_filter_and_tanh(
+            transformed = transforms.density_gaussian_filter_and_tanh(
                 transformed, beta=beta
             )
             # Scale to ensure that full valid range of the density array is reachable.
@@ -183,14 +183,14 @@ class WrappedOptaxTest(unittest.TestCase):
                 lambda array: mid_value + (array - mid_value) / jnp.tanh(beta),
                 transformed,
             )
-            return transform.apply_fixed_pixels(transformed)
+            return transforms.apply_fixed_pixels(transformed)
 
         def initialize_latent_density(density) -> types.Density2DArray:
-            array = transform.normalized_array_from_density(density)
+            array = transforms.normalized_array_from_density(density)
             array = jnp.clip(array, -1, 1)
             array *= jnp.tanh(beta)
             latent_array = jnp.arctanh(array) / beta
-            latent_array = transform.rescale_array_for_density(latent_array, density)
+            latent_array = transforms.rescale_array_for_density(latent_array, density)
             return dataclasses.replace(density, array=latent_array)
 
         # Carry out optimization directly
