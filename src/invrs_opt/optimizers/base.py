@@ -51,6 +51,10 @@ class Optimizer:
 
 
 # Register all optax state types for serialization.
+optax_types = {}
 for name, obj in inspect.getmembers(optax):
     if name.endswith("State") and isinstance(obj, type):
-        json_utils.register_custom_type(obj)
+        optax_types[obj] = True
+
+for obj in optax_types.keys():
+    json_utils.register_custom_type(obj)
