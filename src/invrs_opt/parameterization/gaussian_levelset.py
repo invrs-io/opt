@@ -438,19 +438,23 @@ def _fixed_pixel_constraint(
     array = _to_array(params, mask_gradient=mask_gradient, pad_pixels=pad_pixels)
 
     example_density = params.example_density()
-    fixed_solid = jnp.zeros(example_density.shape, dtype=bool)
-    fixed_void = jnp.zeros(example_density.shape, dtype=bool)
+    fixed_solid = jnp.zeros(example_density.shape[-2:], dtype=bool)
+    fixed_void = jnp.zeros(example_density.shape[-2:], dtype=bool)
     if example_density.fixed_solid is not None:
         fixed_solid = jnp.asarray(example_density.fixed_solid)
     if example_density.fixed_void is not None:
         fixed_void = jnp.asarray(example_density.fixed_void)
 
-    pad_width = ((0, 0),) * (fixed_solid.ndim - 2) + (
+    pad_width_solid = ((0, 0),) * (fixed_solid.ndim - 2) + (
         (pad_pixels, pad_pixels),
         (pad_pixels, pad_pixels),
     )
-    fixed_solid = jnp.pad(fixed_solid, pad_width, mode="edge")
-    fixed_void = jnp.pad(fixed_void, pad_width, mode="edge")
+    pad_width_void = ((0, 0),) * (fixed_void.ndim - 2) + (
+        (pad_pixels, pad_pixels),
+        (pad_pixels, pad_pixels),
+    )
+    fixed_solid = jnp.pad(fixed_solid, pad_width_solid, mode="edge")
+    fixed_void = jnp.pad(fixed_void, pad_width_void, mode="edge")
     fixed = fixed_solid | fixed_void
     target = jnp.where(fixed_solid, 1, 0)
 
