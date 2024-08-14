@@ -20,7 +20,7 @@ from invrs_opt.parameterization import (
 )
 
 PyTree = Any
-WrappedOptaxState = Tuple[PyTree, PyTree, PyTree]
+WrappedOptaxState = Tuple[int, PyTree, PyTree, PyTree]
 
 
 def wrapped_optax(opt: optax.GradientTransformation) -> base.Optimizer:
@@ -205,7 +205,7 @@ def parameterized_wrapped_optax(
         ) -> jnp.ndarray:
             constraints = density_parameterization.constraints(params)
             constraints = tree_util.tree_map(
-                lambda x: jnp.sum(jnp.maximum(x, 0.0)),
+                lambda x: jnp.sum(jnp.maximum(x, 0.0) ** 2),
                 constraints,
             )
             return jnp.sum(jnp.asarray(constraints))
@@ -219,15 +219,27 @@ def parameterized_wrapped_optax(
         ]
         return penalty * jnp.sum(jnp.asarray(losses))
 
+    def _update_parameterized_densities(latent_params: PyTree, step: int) -> PyTree:
+        def _update_leaf(leaf: Any) -> Any:
+            if not _is_parameterized_density(leaf):
+                return leaf
+            return density_parameterization.update(leaf, step)
+
+        return tree_util.tree_map(
+            _update_leaf,
+            latent_params,
+            is_leaf=_is_parameterized_density,
+        )
+
     def init_fn(params: PyTree) -> WrappedOptaxState:
         """Initializes the optimization state."""
         latent_params = _init_latents(params)
         params = _params_from_latents(latent_params)
-        return params, latent_params, opt.init(latent_params)
+        return 0, params, latent_params, opt.init(latent_params)
 
     def params_fn(state: WrappedOptaxState) -> PyTree:
         """Returns the parameters for the given `state`."""
-        params, _, _ = state
+        _, params, _, _ = state
         return params
 
     def update_fn(
@@ -240,7 +252,7 @@ def parameterized_wrapped_optax(
         """Updates the state."""
         del value, params
 
-        _, latent_params, opt_state = state
+        step, _, latent_params, opt_state = state
         _, vjp_fn = jax.vjp(_params_from_latents, latent_params)
         (latent_grad,) = vjp_fn(grad)
 
@@ -264,8 +276,9 @@ def parameterized_wrapped_optax(
         )
         latent_params = optax.apply_updates(params=latent_params, updates=updates)
         latent_params = _clip(latent_params)
+        latent_params = _update_parameterized_densities(latent_params, step)
         params = _params_from_latents(latent_params)
-        return params, latent_params, opt_state
+        return step + 1, params, latent_params, opt_state
 
     return base.Optimizer(init=init_fn, params=params_fn, update=update_fn)
 

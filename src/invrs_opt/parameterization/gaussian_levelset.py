@@ -214,7 +214,7 @@ def gaussian_levelset(
             return params, state
 
         state = init_optimizer.init(params)
-        params, state = jax.lax.fori_loop(
+        params, _ = jax.lax.fori_loop(
             0, init_steps, body_fun=step_fn, init_val=(params, state)
         )
 
@@ -269,10 +269,16 @@ def gaussian_levelset(
         )
         return constraints / length_scale**2
 
+    def update_fn(params: GaussianLevelsetParams, step: int) -> GaussianLevelsetParams:
+        """Perform updates to `params` required for the given `step`."""
+        del step
+        return params
+
     return base.Density2DParameterization(
         to_density=to_density_fn,
         from_density=from_density_fn,
         constraints=constraints_fn,
+        update=update_fn,
     )
 
 
