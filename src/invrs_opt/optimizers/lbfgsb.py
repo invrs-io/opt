@@ -29,7 +29,7 @@ NDArray = onp.ndarray[Any, Any]
 PyTree = Any
 ElementwiseBound = Union[NDArray, Sequence[Optional[float]]]
 JaxLbfgsbDict = Dict[str, jnp.ndarray]
-LbfgsbState = Tuple[PyTree, PyTree, JaxLbfgsbDict]
+LbfgsbState = Tuple[int, PyTree, PyTree, JaxLbfgsbDict]
 
 
 # Task message prefixes for the underlying L-BFGS-B implementation.
@@ -323,7 +323,7 @@ def parameterized_lbfgsb(
         ) -> jnp.ndarray:
             constraints = density_parameterization.constraints(params)
             constraints = tree_util.tree_map(
-                lambda x: jnp.sum(jnp.maximum(x, 0.0)),
+                lambda x: jnp.sum(jnp.maximum(x, 0.0) ** 2),
                 constraints,
             )
             return jnp.sum(jnp.asarray(constraints))
@@ -336,6 +336,18 @@ def parameterized_lbfgsb(
             if _is_parameterized_density(p)
         ]
         return penalty * jnp.sum(jnp.asarray(losses))
+
+    def _update_parameterized_densities(latent_params: PyTree, step: int) -> PyTree:
+        def _update_leaf(leaf: Any) -> Any:
+            if not _is_parameterized_density(leaf):
+                return leaf
+            return density_parameterization.update(leaf, step)
+
+        return tree_util.tree_map(
+            _update_leaf,
+            latent_params,
+            is_leaf=_is_parameterized_density,
+        )
 
     def init_fn(params: PyTree) -> LbfgsbState:
         """Initializes the optimization state."""
@@ -359,11 +371,11 @@ def parameterized_lbfgsb(
         latent_params, jax_lbfgsb_state = jax.pure_callback(
             _init_state_pure, _example_state(latent_params, maxcor), latent_params
         )
-        return _params_from_latents(latent_params), latent_params, jax_lbfgsb_state
+        return 0, _params_from_latents(latent_params), latent_params, jax_lbfgsb_state
 
     def params_fn(state: LbfgsbState) -> PyTree:
         """Returns the parameters for the given `state`."""
-        params, _, _ = state
+        _, params, _, _ = state
         return params
 
     def update_fn(
@@ -390,7 +402,7 @@ def parameterized_lbfgsb(
             flat_latent_params = jnp.asarray(scipy_lbfgsb_state.x)
             return flat_latent_params, scipy_lbfgsb_state.to_jax()
 
-        _, latent_params, jax_lbfgsb_state = state
+        step, _, latent_params, jax_lbfgsb_state = state
         _, vjp_fn = jax.vjp(_params_from_latents, latent_params)
         (latent_grad,) = vjp_fn(grad)
 
@@ -427,7 +439,9 @@ def parameterized_lbfgsb(
             jax_lbfgsb_state,
         )
         latent_params = unflatten_fn(flat_latent_params)
-        return _params_from_latents(latent_params), latent_params, jax_lbfgsb_state
+        latent_params = _update_parameterized_densities(latent_params, step)
+        params = _params_from_latents(latent_params)
+        return step + 1, params, latent_params, jax_lbfgsb_state
 
     return base.Optimizer(
         init=init_fn,
@@ -438,7 +452,7 @@ def parameterized_lbfgsb(
 
 def is_converged(state: LbfgsbState) -> jnp.ndarray:
     """Returns `True` if the optimization has converged."""
-    return state[2]["converged"]
+    return state[3]["converged"]
 
 
 # ------------------------------------------------------------------------------

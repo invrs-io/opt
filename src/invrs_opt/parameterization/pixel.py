@@ -38,8 +38,13 @@ def pixel() -> base.Density2DParameterization:
         del params
         return jnp.asarray(0.0)
 
+    def update_fn(params: PixelParams, step: int) -> PixelParams:
+        del step
+        return params
+
     return base.Density2DParameterization(
         from_density=from_density_fn,
         to_density=to_density_fn,
         constraints=constraints_fn,
+        update=update_fn,
     )

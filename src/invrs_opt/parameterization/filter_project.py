@@ -85,8 +85,14 @@ def filter_project(beta: float) -> base.Density2DParameterization:
         del params
         return jnp.asarray(0.0)
 
+    def update_fn(params: FilterAndProjectParams, step: int) -> FilterAndProjectParams:
+        """Perform updates to `params` required for the given `step`."""
+        del step
+        return params
+
     return base.Density2DParameterization(
         to_density=to_density_fn,
         from_density=from_density_fn,
         constraints=constraints_fn,
+        update=update_fn,
     )

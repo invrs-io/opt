@@ -44,6 +44,13 @@ class ConstraintsFn(Protocol):
         ...
 
 
+class UpdateFn(Protocol):
+    """Performs the required update of a parameterized density for the given step."""
+
+    def __call__(self, params: PyTree, step: int) -> PyTree:
+        ...
+
+
 @dataclasses.dataclass
 class Density2DParameterization:
     """Stores `(from_density, to_density, constraints)` function triple."""
@@ -51,6 +58,7 @@ class Density2DParameterization:
     from_density: FromDensityFn
     to_density: ToDensityFn
     constraints: ConstraintsFn
+    update: UpdateFn
 
 
 @dataclasses.dataclass
