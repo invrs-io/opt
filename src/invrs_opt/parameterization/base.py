@@ -15,10 +15,49 @@ Array = jnp.ndarray | onp.ndarray[Any, Any]
 PyTree = Any
 
 
+class Density2DLatentsBase:
+    """Base class for latents of a parameterized density array."""
+
+    pass
+
+
+class Density2DMetadataBase:
+    """Base class for metadata of a parameterized density array."""
+
+    pass
+
+
+@dataclasses.dataclass
+class ParameterizedDensity2DArray:
+    """Stores latents and metadata for a parameterized density array."""
+
+    latents: Density2DLatentsBase
+    metadata: Optional[Density2DMetadataBase]
+
+
+tree_util.register_dataclass(
+    ParameterizedDensity2DArray,
+    data_fields=["latents", "metadata"],
+    meta_fields=[],
+)
+
+json_utils.register_custom_type(ParameterizedDensity2DArray)
+
+
 class ParameterizedDensity2DArrayBase:
     """Base class for parameterized density arrays."""
 
     pass
+
+
+@dataclasses.dataclass
+class Density2DParameterization:
+    """Stores `(from_density, to_density, constraints, update)` function triple."""
+
+    from_density: "FromDensityFn"
+    to_density: "ToDensityFn"
+    constraints: "ConstraintsFn"
+    update: "UpdateFn"
 
 
 class FromDensityFn(Protocol):
@@ -49,16 +88,6 @@ class UpdateFn(Protocol):
 
     def __call__(self, params: PyTree, step: int) -> PyTree:
         ...
-
-
-@dataclasses.dataclass
-class Density2DParameterization:
-    """Stores `(from_density, to_density, constraints)` function triple."""
-
-    from_density: FromDensityFn
-    to_density: ToDensityFn
-    constraints: ConstraintsFn
-    update: UpdateFn
 
 
 @dataclasses.dataclass
