@@ -3,6 +3,7 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
+import dataclasses
 import unittest
 
 import jax
@@ -13,6 +14,7 @@ from jax import flatten_util
 from parameterized import parameterized
 from totypes import types
 
+from invrs_opt.parameterization import filter_project
 from invrs_opt.optimizers import lbfgsb
 
 jax.config.update("jax_enable_x64", True)
@@ -682,3 +684,43 @@ class ScipyLbfgsStateTest(unittest.TestCase):
 
         # Compare the first few steps for the two schemes.
         onp.testing.assert_allclose(scipy_values[:10], wrapper_values[:10])
+
+
+class StepVariableParameterizationTest(unittest.TestCase):
+    def test_variable_parameterization(self):
+        # Create a custom parameterization whose update method increments `beta` by 1
+        # at each step.
+        p = filter_project.filter_project(beta=1)
+        p.update = lambda x, step: dataclasses.replace(x, beta=x.beta + 1)
+
+        opt = lbfgsb.parameterized_lbfgsb(
+            density_parameterization=p,
+            penalty=1.0,
+        )
+
+        target = jnp.asarray([[0, 1], [1, 0]], dtype=float)
+        target = jnp.kron(target, jnp.ones((10, 10)))
+
+        density = types.Density2DArray(
+            array=jnp.full(target.shape, 0.5),
+            lower_bound=0,
+            upper_bound=1,
+            minimum_width=4,
+            minimum_spacing=4,
+        )
+
+        state = opt.init(density)
+
+        def step_fn(state):
+            def loss_fn(density):
+                return jnp.sum((density.array - target) ** 2)
+
+            params = opt.params(state)
+            value, grad = jax.value_and_grad(loss_fn)(params)
+            return opt.update(grad=grad, value=value, params=params, state=state)
+
+        for _ in range(10):
+            state = step_fn(state)
+
+        # Check that beta has actually been incremented.
+        self.assertEqual(state[2].beta, 11)

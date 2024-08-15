@@ -14,7 +14,7 @@ from jax import flatten_util, tree_util
 from parameterized import parameterized
 from totypes import types
 
-from invrs_opt.parameterization import transforms
+from invrs_opt.parameterization import filter_project, transforms
 from invrs_opt.optimizers import wrapped_optax
 
 
@@ -383,3 +383,44 @@ class WrappedOptaxTest(unittest.TestCase):
         onp.testing.assert_allclose(
             batch_values, onp.transpose(no_batch_values, (1, 0)), atol=1e-4
         )
+
+
+class StepVariableParameterizationTest(unittest.TestCase):
+    def test_variable_parameterization(self):
+        # Create a custom parameterization whose update method increments `beta` by 1
+        # at each step.
+        p = filter_project.filter_project(beta=1)
+        p.update = lambda x, step: dataclasses.replace(x, beta=x.beta + 1)
+
+        opt = wrapped_optax.parameterized_wrapped_optax(
+            opt=optax.adam(0.01),
+            density_parameterization=p,
+            penalty=1.0,
+        )
+
+        target = jnp.asarray([[0, 1], [1, 0]], dtype=float)
+        target = jnp.kron(target, jnp.ones((10, 10)))
+
+        density = types.Density2DArray(
+            array=jnp.full(target.shape, 0.5),
+            lower_bound=0,
+            upper_bound=1,
+            minimum_width=4,
+            minimum_spacing=4,
+        )
+
+        state = opt.init(density)
+
+        def step_fn(state):
+            def loss_fn(density):
+                return jnp.sum((density.array - target) ** 2)
+
+            params = opt.params(state)
+            value, grad = jax.value_and_grad(loss_fn)(params)
+            return opt.update(grad=grad, value=value, params=params, state=state)
+
+        for _ in range(10):
+            state = step_fn(state)
+
+        # Check that beta has actually been incremented.
+        self.assertEqual(state[2].beta, 11)

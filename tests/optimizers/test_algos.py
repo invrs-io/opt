@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 import optax
+from jax import tree_util
 from parameterized import parameterized
 from totypes import json_utils, symmetry, types
 
@@ -76,7 +77,7 @@ PARAMS_WITH_BOUNDED_ARRAY_NUMPY = (
         ),
     },
 )
-PARAMS_WITH_BOUNDED_ARRAY_JAX = jax.tree_util.tree_map(
+PARAMS_WITH_BOUNDED_ARRAY_JAX = tree_util.tree_map(
     jnp.asarray, PARAMS_WITH_BOUNDED_ARRAY_NUMPY
 )
 PARAMS_WITH_DENSITY_2D_NUMPY = (
@@ -135,7 +136,7 @@ PARAMS_WITH_DENSITY_2D_NUMPY = (
         ),
     },
 )
-PARAMS_WITH_DENSITY_2D_JAX = jax.tree_util.tree_map(
+PARAMS_WITH_DENSITY_2D_JAX = tree_util.tree_map(
     jnp.asarray, PARAMS_WITH_DENSITY_2D_NUMPY
 )
 PARAMS = [
@@ -150,7 +151,7 @@ PARAMS = [
 
 def _lists_to_tuple(pytree, max_depth=10):
     for _ in range(max_depth):
-        pytree = jax.tree_util.tree_map(
+        pytree = tree_util.tree_map(
             lambda x: tuple(x) if isinstance(x, list) else x,
             pytree,
             is_leaf=lambda x: isinstance(x, list),
@@ -170,24 +171,28 @@ class BasicOptimizerTest(unittest.TestCase):
     @parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
     def test_state_is_serializable(self, params, opt):
         state = opt.init(params)
-        leaves, treedef = jax.tree_util.tree_flatten(state)
 
         serialized_state = serialize(state)
         restored_state = deserialize(serialized_state)
-        # Serialization/deserialization unavoidably converts tuples to lists.
-        # Convert back to tuples to facilitate comparison.
-        restored_state = _lists_to_tuple(restored_state)
-        restored_leaves, restored_treedef = jax.tree_util.tree_flatten(restored_state)
 
-        self.assertEqual(treedef, restored_treedef)
+        # Serialization/deserialization currently converts tuples to lists. Compare
+        # tree structures, neglecting difference between tuples and lists.
+        self.assertEqual(
+            tree_util.tree_structure(_lists_to_tuple(state)),
+            tree_util.tree_structure(_lists_to_tuple(restored_state)),
+        )
 
-        for a, b in zip(leaves, restored_leaves):
+        for a, b in zip(
+            tree_util.tree_leaves(state),
+            tree_util.tree_leaves(restored_state),
+            strict=True,
+        ):
             onp.testing.assert_array_equal(a, b)
 
     @parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
     def test_optimize(self, initial_params, opt):
         def loss_fn(params):
-            leaves = jax.tree_util.tree_leaves(params)
+            leaves = tree_util.tree_leaves(params)
             leaves_sum_squared = [jnp.sum(leaf**2) for leaf in leaves]
             return jnp.sum(jnp.asarray(leaves_sum_squared))
 
@@ -197,8 +202,8 @@ class BasicOptimizerTest(unittest.TestCase):
             value, grad = jax.value_and_grad(loss_fn)(params)
             state = opt.update(grad=grad, value=value, params=params, state=state)
 
-        initial_treedef = jax.tree_util.tree_structure(initial_params)
-        treedef = jax.tree_util.tree_structure(params)
+        initial_treedef = tree_util.tree_structure(initial_params)
+        treedef = tree_util.tree_structure(params)
         # Assert that the tree structure (i.e. including auxilliary quantities) is
         # preserved by optimization.
         self.assertEqual(treedef, initial_treedef)
@@ -206,7 +211,7 @@ class BasicOptimizerTest(unittest.TestCase):
     @parameterized.expand(itertools.product(PARAMS, OPTIMIZERS))
     def test_optimize_with_serialization(self, initial_params, opt):
         def loss_fn(params):
-            leaves = jax.tree_util.tree_leaves(params)
+            leaves = tree_util.tree_leaves(params)
             leaves_sum_squared = [jnp.sum(leaf**2) for leaf in leaves]
             return jnp.sum(jnp.asarray(leaves_sum_squared))
 
@@ -248,16 +253,16 @@ class BasicOptimizerTest(unittest.TestCase):
             # Serialization/deserialization unavoidably converts tuples to lists.
             # Convert back to tuples to facilitate comparison.
             p = _lists_to_tuple(p)
-            a_leaves, a_treedef = jax.tree_util.tree_flatten(p)
-            b_leaves, b_treedef = jax.tree_util.tree_flatten(ep)
+            a_leaves, a_treedef = tree_util.tree_flatten(p)
+            b_leaves, b_treedef = tree_util.tree_flatten(ep)
             self.assertEqual(a_treedef, b_treedef)
             for a, b in zip(a_leaves, b_leaves):
                 onp.testing.assert_array_equal(a, b)
 
         for g, eg in zip(grad_list, expected_grad_list):
             g = _lists_to_tuple(g)
-            a_leaves, a_treedef = jax.tree_util.tree_flatten(g)
-            b_leaves, b_treedef = jax.tree_util.tree_flatten(eg)
+            a_leaves, a_treedef = tree_util.tree_flatten(g)
+            b_leaves, b_treedef = tree_util.tree_flatten(eg)
             self.assertEqual(a_treedef, b_treedef)
             for a, b in zip(a_leaves, b_leaves):
                 onp.testing.assert_array_equal(a, b)
