@@ -178,6 +178,74 @@ def parameterized_wrapped_optax(
     if density_parameterization is None:
         density_parameterization = pixel.pixel()
 
+    def init_fn(params: PyTree) -> WrappedOptaxState:
+        """Initializes the optimization state."""
+        latent_params = _init_latents(params)
+        return (
+            0,  # step
+            _params_from_latents(latent_params),  # params
+            latent_params,  # latent params
+            opt.init(tree_util.tree_leaves(latent_params)),  # opt state
+        )
+
+    def params_fn(state: WrappedOptaxState) -> PyTree:
+        """Returns the parameters for the given `state`."""
+        _, params, _, _ = state
+        return params
+
+    def update_fn(
+        *,
+        grad: PyTree,
+        value: float,
+        params: PyTree,
+        state: WrappedOptaxState,
+    ) -> WrappedOptaxState:
+        """Updates the state."""
+        del value, params
+
+        step, params, latent_params, opt_state = state
+
+        _, vjp_fn = jax.vjp(_params_from_latents, latent_params)
+        (latent_grad,) = vjp_fn(grad)
+
+        if not (
+            tree_util.tree_structure(latent_grad)
+            == tree_util.tree_structure(latent_params)  # type: ignore[operator]
+        ):
+            raise ValueError(
+                f"Tree structure of `latent_grad` was different than expected, got \n"
+                f"{tree_util.tree_structure(latent_grad)} but expected \n"
+                f"{tree_util.tree_structure(latent_params)}."
+            )
+
+        constraint_loss_grad = jax.grad(_constraint_loss)(latent_params)
+        latent_grad = tree_util.tree_map(
+            lambda a, b: a + b, latent_grad, constraint_loss_grad
+        )
+
+        updates_leaves, opt_state = opt.update(
+            updates=tree_util.tree_leaves(latent_grad),
+            state=opt_state,
+            params=tree_util.tree_leaves(latent_params),
+        )
+        latent_params_leaves = optax.apply_updates(
+            params=tree_util.tree_leaves(latent_params),
+            updates=updates_leaves,
+        )
+        latent_params = tree_util.tree_unflatten(
+            treedef=tree_util.tree_structure(latent_params),
+            leaves=latent_params_leaves,
+        )
+
+        latent_params = _clip(latent_params)
+        latent_params = _update_parameterized_densities(latent_params, step + 1)
+        params = _params_from_latents(latent_params)
+        return (step + 1, params, latent_params, opt_state)
+
+    # -------------------------------------------------------------------------
+    # Functions related to the density parameterization.
+    # -------------------------------------------------------------------------
+
     def _init_latents(params: PyTree) -> PyTree:
         def _leaf_init_latents(leaf: Any) -> Any:
             leaf = _clip(leaf)
@@ -199,6 +267,22 @@ def parameterized_wrapped_optax(
             is_leaf=_is_parameterized_density,
         )
 
+    def _update_parameterized_densities(latent_params: PyTree, step: int) -> PyTree:
+        def _update_leaf(leaf: Any) -> Any:
+            if not _is_parameterized_density(leaf):
+                return leaf
+            return density_parameterization.update(leaf, step)
+
+        return tree_util.tree_map(
+            _update_leaf,
+            latent_params,
+            is_leaf=_is_parameterized_density,
+        )
+
+    # -------------------------------------------------------------------------
+    # Functions related to the constraints to be minimized.
+    # -------------------------------------------------------------------------
+
     def _constraint_loss(latent_params: PyTree) -> jnp.ndarray:
         def _constraint_loss_leaf(
             params: parameterization_base.ParameterizedDensity2DArrayBase,
@@ -218,67 +302,6 @@ def parameterized_wrapped_optax(
             if _is_parameterized_density(p)
         ]
         return penalty * jnp.sum(jnp.asarray(losses))
-
-    def _update_parameterized_densities(latent_params: PyTree, step: int) -> PyTree:
-        def _update_leaf(leaf: Any) -> Any:
-            if not _is_parameterized_density(leaf):
-                return leaf
-            return density_parameterization.update(leaf, step)
-
-        return tree_util.tree_map(
-            _update_leaf,
-            latent_params,
-            is_leaf=_is_parameterized_density,
-        )
-
-    def init_fn(params: PyTree) -> WrappedOptaxState:
-        """Initializes the optimization state."""
-        latent_params = _init_latents(params)
-        params = _params_from_latents(latent_params)
-        return 0, params, latent_params, opt.init(latent_params)
-
-    def params_fn(state: WrappedOptaxState) -> PyTree:
-        """Returns the parameters for the given `state`."""
-        _, params, _, _ = state
-        return params
-
-    def update_fn(
-        *,
-        grad: PyTree,
-        value: float,
-        params: PyTree,
-        state: WrappedOptaxState,
-    ) -> WrappedOptaxState:
-        """Updates the state."""
-        del value, params
-
-        step, _, latent_params, opt_state = state
-        _, vjp_fn = jax.vjp(_params_from_latents, latent_params)
-        (latent_grad,) = vjp_fn(grad)
-
-        if not (
-            tree_util.tree_structure(latent_grad)
-            == tree_util.tree_structure(latent_params)  # type: ignore[operator]
-        ):
-            raise ValueError(
-                f"Tree structure of `latent_grad` was different than expected, got \n"
-                f"{tree_util.tree_structure(latent_grad)} but expected \n"
-                f"{tree_util.tree_structure(latent_params)}."
-            )
-
-        constraint_loss_grad = jax.grad(_constraint_loss)(latent_params)
-        latent_grad = tree_util.tree_map(
-            lambda a, b: a + b, latent_grad, constraint_loss_grad
-        )
-
-        updates, opt_state = opt.update(
-            updates=latent_grad, state=opt_state, params=latent_params
-        )
-        latent_params = optax.apply_updates(params=latent_params, updates=updates)
-        latent_params = _clip(latent_params)
-        latent_params = _update_parameterized_densities(latent_params, step)
-        params = _params_from_latents(latent_params)
-        return step + 1, params, latent_params, opt_state
 
     return base.Optimizer(init=init_fn, params=params_fn, update=update_fn)
 
