@@ -29,12 +29,30 @@ DEFAULT_INIT_OPTIMIZER: optax.GradientTransformation = optax.adam(1e-1)
 
 
 @dataclasses.dataclass
-class GaussianLevelsetParams(base.ParameterizedDensity2DArrayBase):
-    """Parameters of a density represented by a Gaussian levelset.
+class GaussianLevelsetParams(base.ParameterizedDensity2DArray):
+    """Stores parameters for the Gaussian levelset parameterization."""
+
+    latents: "GaussianLevelsetLatents"
+    metadata: "GaussianLevelsetMetadata"
+
+
+@dataclasses.dataclass
+class GaussianLevelsetLatents(base.LatentsBase):
+    """Stores latent parameters for the Gaussian levelset parameterization.
 
     Attributes:
         amplitude: Array giving the amplitude of the Gaussian basis function at
             levelset control points.
+    """
+
+    amplitude: jnp.ndarray
+
+
+@dataclasses.dataclass
+class GaussianLevelsetMetadata(base.MetadataBase):
+    """Stores metadata for the Gaussian levelset parameterization.
+
+    Attributes:
         length_scale_spacing_factor: The number of levelset control points per unit of
             minimum length scale (mean of density minimum width and minimum spacing).
         length_scale_fwhm_factor: The ratio of Gaussian full-width at half-maximum to
@@ -45,7 +63,6 @@ class GaussianLevelsetParams(base.ParameterizedDensity2DArrayBase):
         density_metadata: Metadata for the density array obtained from the parameters.
     """
 
-    amplitude: jnp.ndarray
     length_scale_spacing_factor: float
     length_scale_fwhm_factor: float
     smoothing_factor: int
@@ -55,68 +72,31 @@ class GaussianLevelsetParams(base.ParameterizedDensity2DArrayBase):
     def __post_init__(self) -> None:
         self.density_shape = tuple(self.density_shape)
 
-    def example_density(self) -> types.Density2DArray:
-        """Returns an example density with appropriate shape and metadata."""
-        with jax.ensure_compile_time_eval():
-            return types.Density2DArray(
-                array=jnp.zeros(self.density_shape),
-                **dataclasses.asdict(self.density_metadata),
-            )
 
-
-_GaussianLevelsetParamsAux = Tuple[
-    float, float, int, Tuple[int, ...], tree_util.PyTreeDef
-]
-
-
-def _flatten_gaussian_levelset_params(
-    params: GaussianLevelsetParams,
-) -> Tuple[Tuple[jnp.ndarray], _GaussianLevelsetParamsAux]:
-    _, flat_metadata = tree_util.tree_flatten(params.density_metadata)
-    return (
-        (params.amplitude,),
-        (
-            params.length_scale_spacing_factor,
-            params.length_scale_fwhm_factor,
-            params.smoothing_factor,
-            params.density_shape,
-            flat_metadata,
-        ),
-    )
-
-
-def _unflatten_gaussian_levelset_params(
-    aux: _GaussianLevelsetParamsAux,
-    children: Tuple[jnp.ndarray],
-) -> GaussianLevelsetParams:
-    (amplitude,) = children
-    (
-        length_scale_spacing_factor,
-        length_scale_fwhm_factor,
-        smoothing_factor,
-        density_shape,
-        flat_metadata,
-    ) = aux
-
-    density_metadata = tree_util.tree_unflatten(flat_metadata, ())
-    return GaussianLevelsetParams(
-        amplitude=amplitude,
-        length_scale_spacing_factor=length_scale_spacing_factor,
-        length_scale_fwhm_factor=length_scale_fwhm_factor,
-        smoothing_factor=smoothing_factor,
-        density_shape=tuple(density_shape),
-        density_metadata=density_metadata,
-    )
-
-
-tree_util.register_pytree_node(
+tree_util.register_dataclass(
     GaussianLevelsetParams,
-    flatten_func=_flatten_gaussian_levelset_params,
-    unflatten_func=_unflatten_gaussian_levelset_params,
+    data_fields=["latents", "metadata"],
+    meta_fields=[],
 )
-
-
+tree_util.register_dataclass(
+    GaussianLevelsetLatents,
+    data_fields=["amplitude"],
+    meta_fields=[],
+)
+tree_util.register_dataclass(
+    GaussianLevelsetMetadata,
+    data_fields=[
+        "length_scale_spacing_factor",
+        "length_scale_fwhm_factor",
+        "smoothing_factor",
+        "density_shape",
+        "density_metadata",
+    ],
+    meta_fields=[],
+)
 json_utils.register_custom_type(GaussianLevelsetParams)
+json_utils.register_custom_type(GaussianLevelsetLatents)
+json_utils.register_custom_type(GaussianLevelsetMetadata)
 
 
 def gaussian_levelset(
@@ -187,23 +167,21 @@ def gaussian_levelset(
         pad_width += ((0, 0),) if density.periodic[1] else ((1, 1),)
         amplitude = jnp.pad(amplitude, pad_width, mode="edge")
 
-        density_metadata_dict = dataclasses.asdict(density)
-        del density_metadata_dict["array"]
-        density_metadata = base.Density2DMetadata(**density_metadata_dict)
-        params = GaussianLevelsetParams(
-            amplitude=amplitude,
+        latents = GaussianLevelsetLatents(amplitude=amplitude)
+        metadata = GaussianLevelsetMetadata(
             length_scale_spacing_factor=length_scale_spacing_factor,
             length_scale_fwhm_factor=length_scale_fwhm_factor,
             smoothing_factor=smoothing_factor,
             density_shape=density.shape,
-            density_metadata=density_metadata,
+            density_metadata=base.Density2DMetadata.from_density(density),
         )
 
         def step_fn(
             _: int,
             params_and_state: Tuple[PyTree, PyTree],
         ) -> Tuple[PyTree, PyTree]:
-            def loss_fn(params: GaussianLevelsetParams) -> jnp.ndarray:
+            def loss_fn(latents: GaussianLevelsetLatents) -> jnp.ndarray:
+                params = GaussianLevelsetParams(latents, metadata=metadata)
                 density_from_params = to_density_fn(params, mask_gradient=False)
                 return jnp.mean((density_from_params.array - target_array) ** 2)
 
@@ -213,13 +191,14 @@ def gaussian_levelset(
             params = optax.apply_updates(params, updates)
             return params, state
 
-        state = init_optimizer.init(params)
-        params, _ = jax.lax.fori_loop(
-            0, init_steps, body_fun=step_fn, init_val=(params, state)
+        state = init_optimizer.init(latents)
+        latents, _ = jax.lax.fori_loop(
+            0, init_steps, body_fun=step_fn, init_val=(latents, state)
         )
 
-        maxval = jnp.amax(jnp.abs(params.amplitude), axis=(-2, -1), keepdims=True)
-        return dataclasses.replace(params, amplitude=params.amplitude / maxval)
+        maxval = jnp.amax(jnp.abs(latents.amplitude), axis=(-2, -1), keepdims=True)
+        latents = dataclasses.replace(latents, amplitude=latents.amplitude / maxval)
+        return GaussianLevelsetParams(latents=latents, metadata=metadata)
 
     def to_density_fn(
         params: GaussianLevelsetParams,
@@ -228,7 +207,7 @@ def gaussian_levelset(
         """Return a density from the latent parameters."""
         array = _to_array(params, mask_gradient=mask_gradient, pad_pixels=0)
 
-        example_density = params.example_density()
+        example_density = _example_density(params)
         lb = example_density.lower_bound
         ub = example_density.upper_bound
         array = lb + array * (ub - lb)
@@ -263,7 +242,7 @@ def gaussian_levelset(
         )
 
         # Normalize constraints to make them (somewhat) resolution-independent.
-        example_density = params.example_density()
+        example_density = _example_density(params)
         length_scale = 0.5 * (
             example_density.minimum_spacing + example_density.minimum_width
         )
@@ -287,6 +266,15 @@ def gaussian_levelset(
 # -----------------------------------------------------------------------------
 
 
+def _example_density(params: GaussianLevelsetParams) -> types.Density2DArray:
+    """Returns an example density with appropriate shape and metadata."""
+    with jax.ensure_compile_time_eval():
+        return types.Density2DArray(
+            array=jnp.zeros(params.metadata.density_shape),
+            **dataclasses.asdict(params.metadata.density_metadata),
+        )
+
+
 def _to_array(
     params: GaussianLevelsetParams,
     mask_gradient: bool,
@@ -308,7 +296,7 @@ def _to_array(
     Returns:
         The array.
     """
-    example_density = params.example_density()
+    example_density = _example_density(params)
     periodic: Tuple[bool, bool] = example_density.periodic
     phi = _phi_from_params(
         params=params,
@@ -319,7 +307,7 @@ def _to_array(
         periodic=periodic,
         mask_gradient=mask_gradient,
     )
-    return _downsample_spatial_dims(array, params.smoothing_factor)
+    return _downsample_spatial_dims(array, params.metadata.smoothing_factor)
 
 
 def _phi_from_params(
@@ -337,32 +325,35 @@ def _phi_from_params(
         The levelset array `phi`.
     """
     with jax.ensure_compile_time_eval():
-        example_density = params.example_density()
+        example_density = _example_density(params)
         length_scale = 0.5 * (
             example_density.minimum_width + example_density.minimum_spacing
         )
-        fwhm = length_scale * params.length_scale_fwhm_factor
+        fwhm = length_scale * params.metadata.length_scale_fwhm_factor
         sigma = fwhm / (2 * jnp.sqrt(2 * jnp.log(2)))
 
+        s_factor = params.metadata.smoothing_factor
         highres_i = (
             0.5
             + jnp.arange(
-                params.smoothing_factor * (-pad_pixels),
-                params.smoothing_factor * (pad_pixels + example_density.shape[-2]),
+                s_factor * (-pad_pixels),
+                s_factor * (pad_pixels + example_density.shape[-2]),
             )
-        ) / params.smoothing_factor
+        ) / s_factor
         highres_j = (
             0.5
             + jnp.arange(
-                params.smoothing_factor * (-pad_pixels),
-                params.smoothing_factor * (pad_pixels + example_density.shape[-1]),
+                s_factor * (-pad_pixels),
+                s_factor * (pad_pixels + example_density.shape[-1]),
             )
-        ) / params.smoothing_factor
+        ) / s_factor
 
         # Coordinates for the control points of the Gaussian radial basis functions.
         levelset_i, levelset_j = _control_point_coords(
-            density_shape=params.density_shape[-2:],  # type: ignore[arg-type]
-            levelset_shape=params.amplitude.shape[-2:],  # type: ignore[arg-type]
+            density_shape=params.metadata.density_shape[-2:],  # type: ignore[arg-type]
+            levelset_shape=(
+                params.latents.amplitude.shape[-2:]  # type: ignore[arg-type]
+            ),
             periodic=example_density.periodic,
         )
 
@@ -391,7 +382,7 @@ def _phi_from_params(
         levelset_i = levelset_i.flatten()
         levelset_j = levelset_j.flatten()
 
-    amplitude = params.amplitude
+    amplitude = params.latents.amplitude
     if example_density.periodic[0]:
         amplitude = jnp.concat([amplitude] * 3, axis=-2)
     if example_density.periodic[1]:
@@ -410,8 +401,8 @@ def _phi_from_params(
     _, array = jax.lax.scan(scan_fn, (), xs=highres_i)
     array = jnp.moveaxis(array, 0, -2)
 
-    assert array.shape[-2] % params.smoothing_factor == 0
-    assert array.shape[-1] % params.smoothing_factor == 0
+    assert array.shape[-2] % s_factor == 0
+    assert array.shape[-1] % s_factor == 0
     array = symmetry.symmetrize(array, tuple(example_density.symmetries))
     return array
 
@@ -443,7 +434,7 @@ def _fixed_pixel_constraint(
     """
     array = _to_array(params, mask_gradient=mask_gradient, pad_pixels=pad_pixels)
 
-    example_density = params.example_density()
+    example_density = _example_density(params)
     fixed_solid = jnp.zeros(example_density.shape[-2:], dtype=bool)
     fixed_void = jnp.zeros(example_density.shape[-2:], dtype=bool)
     if example_density.fixed_solid is not None:
@@ -491,9 +482,9 @@ def _levelset_constraints(
             beyond the boundaries of the parameterized density.
 
     Returns:
-        The minimum length scale and minimum curvature constraint arrays.
+        The minimum length scale and minimum curvature constraint arrays.s
     """
-    example_density = params.example_density()
+    example_density = _example_density(params)
     minimum_length_scale = 0.5 * (
         example_density.minimum_width + example_density.minimum_spacing
     )
@@ -512,9 +503,10 @@ def _levelset_constraints(
     )
 
     # Downsample so that constraints shape matches the density shape.
+    factor = params.metadata.smoothing_factor
     return (
-        _downsample_spatial_dims(length_scale_constraint, params.smoothing_factor),
-        _downsample_spatial_dims(curvature_constraint, params.smoothing_factor),
+        _downsample_spatial_dims(length_scale_constraint, factor),
+        _downsample_spatial_dims(curvature_constraint, factor),
     )
 
 
@@ -529,7 +521,7 @@ def _phi_derivatives_and_inverse_radius(
         pad_pixels=pad_pixels,
     )
 
-    d = 1 / params.smoothing_factor
+    d = 1 / params.metadata.smoothing_factor
     phi_x, phi_y = jnp.gradient(phi, d, axis=(-2, -1))
     phi_xx, phi_yx = jnp.gradient(phi_x, d, axis=(-2, -1))
     phi_xy, phi_yy = jnp.gradient(phi_y, d, axis=(-2, -1))

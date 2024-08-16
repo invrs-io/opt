@@ -9,24 +9,74 @@ from typing import Any, Optional, Protocol, Sequence, Tuple
 import jax.numpy as jnp
 import numpy as onp
 from jax import tree_util
-from totypes import json_utils, types
+from totypes import json_utils, partition_utils, types
 
 Array = jnp.ndarray | onp.ndarray[Any, Any]
 PyTree = Any
 
 
-class ParameterizedDensity2DArrayBase:
-    """Base class for parameterized density arrays."""
+@dataclasses.dataclass
+class ParameterizedDensity2DArray:
+    """Stores latents and metadata for a parameterized density array."""
+
+    latents: "LatentsBase"
+    metadata: Optional["MetadataBase"]
+
+
+class LatentsBase:
+    """Base class for latents of a parameterized density array."""
 
     pass
+
+
+class MetadataBase:
+    """Base class for metadata of a parameterized density array."""
+
+    pass
+
+
+tree_util.register_dataclass(
+    ParameterizedDensity2DArray,
+    data_fields=["latents", "metadata"],
+    meta_fields=[],
+)
+json_utils.register_custom_type(ParameterizedDensity2DArray)
+
+
+def partition_density_metadata(tree: PyTree) -> Tuple[PyTree, PyTree]:
+    """Splits a pytree with parameterized densities into metadata from latents."""
+    metadata, latents = partition_utils.partition(
+        tree,
+        select_fn=lambda x: isinstance(x, MetadataBase),
+        is_leaf=_is_metadata_or_none,
+    )
+    return metadata, latents
+
+
+def combine_density_metadata(metadata: PyTree, latents: PyTree) -> PyTree:
+    """Combines pytrees containing metadata and latents."""
+    return partition_utils.combine(metadata, latents, is_leaf=_is_metadata_or_none)
+
+
+def _is_metadata_or_none(leaf: Any) -> bool:
+    """Return `True` if `leaf` is `None` or density metadata."""
+    return leaf is None or isinstance(leaf, MetadataBase)
+
+
+@dataclasses.dataclass
+class Density2DParameterization:
+    """Stores `(from_density, to_density, constraints, update)` function triple."""
+
+    from_density: "FromDensityFn"
+    to_density: "ToDensityFn"
+    constraints: "ConstraintsFn"
+    update: "UpdateFn"
 
 
 class FromDensityFn(Protocol):
     """Generate the latent representation of a density array."""
 
-    def __call__(
-        self, density: types.Density2DArray
-    ) -> ParameterizedDensity2DArrayBase:
+    def __call__(self, density: types.Density2DArray) -> ParameterizedDensity2DArray:
         ...
 
 
@@ -52,16 +102,6 @@ class UpdateFn(Protocol):
 
 
 @dataclasses.dataclass
-class Density2DParameterization:
-    """Stores `(from_density, to_density, constraints)` function triple."""
-
-    from_density: FromDensityFn
-    to_density: ToDensityFn
-    constraints: ConstraintsFn
-    update: UpdateFn
-
-
-@dataclasses.dataclass
 class Density2DMetadata:
     """Stores the metadata of a `Density2DArray`."""
 
@@ -77,6 +117,12 @@ class Density2DMetadata:
     def __post_init__(self) -> None:
         self.periodic = tuple(self.periodic)
         self.symmetries = tuple(self.symmetries)
+
+    @classmethod
+    def from_density(self, density: types.Density2DArray) -> "Density2DMetadata":
+        density_metadata_dict = dataclasses.asdict(density)
+        del density_metadata_dict["array"]
+        return Density2DMetadata(**density_metadata_dict)
 
 
 def _flatten_density_2d_metadata(

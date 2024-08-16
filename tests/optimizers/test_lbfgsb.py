@@ -3,7 +3,6 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
-import dataclasses
 import unittest
 
 import jax
@@ -691,7 +690,13 @@ class StepVariableParameterizationTest(unittest.TestCase):
         # Create a custom parameterization whose update method increments `beta` by 1
         # at each step.
         p = filter_project.filter_project(beta=1)
-        p.update = lambda x, step: dataclasses.replace(x, beta=x.beta + 1)
+
+        def update_fn(params, step):
+            del step
+            params.metadata.beta += 1
+            return params
+
+        p.update = update_fn
 
         opt = lbfgsb.parameterized_lbfgsb(
             density_parameterization=p,
@@ -723,4 +728,4 @@ class StepVariableParameterizationTest(unittest.TestCase):
             state = step_fn(state)
 
         # Check that beta has actually been incremented.
-        self.assertEqual(state[2].beta, 11)
+        self.assertEqual(state[2].metadata.beta, 11)
