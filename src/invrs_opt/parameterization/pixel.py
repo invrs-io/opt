@@ -13,26 +13,40 @@ from invrs_opt.parameterization import base
 
 
 @dataclasses.dataclass
-class PixelParams(base.ParameterizedDensity2DArrayBase):
-    """Stores latent parameters of the direct pixel parameterization."""
+class PixelParams(base.ParameterizedDensity2DArray):
+    latents: "PixelLatents"
+    metadata: None = None
+
+
+@dataclasses.dataclass
+class PixelLatents(base.LatentsBase):
+    """Stores latent parameters for the direct pixel parameterization."""
 
     density: types.Density2DArray
 
 
-tree_util.register_dataclass(PixelParams, data_fields=["density"], meta_fields=[])
-
-
+tree_util.register_dataclass(
+    PixelParams,
+    data_fields=["latents"],
+    meta_fields=[],
+)
+tree_util.register_dataclass(
+    PixelLatents,
+    data_fields=["density"],
+    meta_fields=[],
+)
 json_utils.register_custom_type(PixelParams)
+json_utils.register_custom_type(PixelLatents)
 
 
 def pixel() -> base.Density2DParameterization:
     """Return the direct pixel parameterization."""
 
     def from_density_fn(density: types.Density2DArray) -> PixelParams:
-        return PixelParams(density=density)
+        return PixelParams(latents=PixelLatents(density=density))
 
     def to_density_fn(params: PixelParams) -> types.Density2DArray:
-        return params.density
+        return params.latents.density
 
     def constraints_fn(params: PixelParams) -> jnp.ndarray:
         del params

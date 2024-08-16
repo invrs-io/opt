@@ -13,25 +13,53 @@ from invrs_opt.parameterization import base, transforms
 
 
 @dataclasses.dataclass
-class FilterAndProjectParams(base.ParameterizedDensity2DArrayBase):
-    """Stores the latent parameters of the pixel parameterization.
+class FilterProjectParams(base.ParameterizedDensity2DArray):
+    """Stores parameters for the filter-project parameterization."""
 
-    Attributes:
+    latents: "FilterProjectLatents"
+    metadata: "FilterProjectMetadata"
+
+
+@dataclasses.dataclass
+class FilterProjectLatents(base.LatentsBase):
+    """Stores latent parameters for the filter-project parameterization.
+
+    Attributes:s
         latent_density: The latent variable from which the density is obtained.
-        beta: Determines the sharpness of the thresholding operation.
     """
 
     latent_density: types.Density2DArray
+
+
+@dataclasses.dataclass
+class FilterProjectMetadata(base.MetadataBase):
+    """Stores metadata for the filter-project parameterization.
+
+    Attributes:
+        beta: Determines the sharpness of the thresholding operation.
+    """
+
     beta: float
 
 
 tree_util.register_dataclass(
-    FilterAndProjectParams,
+    FilterProjectParams,
+    data_fields=["latents", "metadata"],
+    meta_fields=[],
+)
+tree_util.register_dataclass(
+    FilterProjectLatents,
     data_fields=["latent_density"],
+    meta_fields=[],
+)
+tree_util.register_dataclass(
+    FilterProjectMetadata,
+    data_fields=[],
     meta_fields=["beta"],
 )
-
-json_utils.register_custom_type(FilterAndProjectParams)
+json_utils.register_custom_type(FilterProjectParams)
+json_utils.register_custom_type(FilterProjectLatents)
+json_utils.register_custom_type(FilterProjectMetadata)
 
 
 def filter_project(beta: float) -> base.Density2DParameterization:
@@ -55,24 +83,26 @@ def filter_project(beta: float) -> base.Density2DParameterization:
         The `Density2DParameterization`.
     """
 
-    def from_density_fn(density: types.Density2DArray) -> FilterAndProjectParams:
+    def from_density_fn(density: types.Density2DArray) -> FilterProjectParams:
         """Return latent parameters for the given `density`."""
         array = transforms.normalized_array_from_density(density)
         array = jnp.clip(array, -1, 1)
         array *= jnp.tanh(beta)
         latent_array = jnp.arctanh(array) / beta
         latent_array = transforms.rescale_array_for_density(latent_array, density)
-        return FilterAndProjectParams(
-            latent_density=dataclasses.replace(density, array=latent_array),
-            beta=beta,
+        latent_density = density = dataclasses.replace(density, array=latent_array)
+        return FilterProjectParams(
+            latents=FilterProjectLatents(latent_density=latent_density),
+            metadata=FilterProjectMetadata(beta=beta),
         )
 
-    def to_density_fn(params: FilterAndProjectParams) -> types.Density2DArray:
+    def to_density_fn(params: FilterProjectParams) -> types.Density2DArray:
         """Return a density from the latent parameters."""
-        transformed = types.symmetrize_density(params.latent_density)
-        transformed = transforms.density_gaussian_filter_and_tanh(
-            transformed, beta=params.beta
-        )
+        latent_density = params.latents.latent_density
+        beta = params.metadata.beta
+
+        transformed = types.symmetrize_density(latent_density)
+        transformed = transforms.density_gaussian_filter_and_tanh(transformed, beta)
         # Scale to ensure that the full valid range of the density array is reachable.
         mid_value = (transformed.lower_bound + transformed.upper_bound) / 2
         transformed = tree_util.tree_map(
@@ -80,12 +110,12 @@ def filter_project(beta: float) -> base.Density2DParameterization:
         )
         return transforms.apply_fixed_pixels(transformed)
 
-    def constraints_fn(params: FilterAndProjectParams) -> jnp.ndarray:
+    def constraints_fn(params: FilterProjectParams) -> jnp.ndarray:
         """Computes constraints associated with the params."""
         del params
         return jnp.asarray(0.0)
 
-    def update_fn(params: FilterAndProjectParams, step: int) -> FilterAndProjectParams:
+    def update_fn(params: FilterProjectParams, step: int) -> FilterProjectParams:
         """Perform updates to `params` required for the given `step`."""
         del step
         return params
