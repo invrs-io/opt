@@ -6,6 +6,8 @@ Copyright (c) 2023 The INVRS-IO authors.
 import itertools
 import unittest
 
+import jax
+import jax.numpy as jnp
 import numpy as onp
 from parameterized import parameterized
 from totypes import types
@@ -34,3 +36,22 @@ class GaussianLevelsetTest(unittest.TestCase):
         initial_density = parameterization.to_density(latent_params)
 
         onp.testing.assert_allclose(initial_density.array, density.array)
+
+    def test_jit(self):
+        density = types.Density2DArray(
+            array=onp.zeros((10, 12)),
+            lower_bound=0,
+            upper_bound=1,
+            minimum_width=3,
+            minimum_spacing=3,
+        )
+
+        parameterization = gaussian_levelset.gaussian_levelset()
+        latent_params = parameterization.from_density(density)
+
+        @jax.jit
+        def jit_fn(latent_params):
+            params = parameterization.to_density(latent_params)
+            return jnp.sum(params.array)
+
+        jit_fn(latent_params)

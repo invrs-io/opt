@@ -88,11 +88,9 @@ tree_util.register_dataclass(
     data_fields=[
         "length_scale_spacing_factor",
         "length_scale_fwhm_factor",
-        "smoothing_factor",
-        "density_shape",
         "density_metadata",
     ],
-    meta_fields=[],
+    meta_fields=["density_shape", "smoothing_factor"],
 )
 json_utils.register_custom_type(GaussianLevelsetParams)
 json_utils.register_custom_type(GaussianLevelsetLatents)
@@ -298,15 +296,8 @@ def _to_array(
     """
     example_density = _example_density(params)
     periodic: Tuple[bool, bool] = example_density.periodic
-    phi = _phi_from_params(
-        params=params,
-        pad_pixels=pad_pixels,
-    )
-    array = _levelset_threshold(
-        phi=phi,
-        periodic=periodic,
-        mask_gradient=mask_gradient,
-    )
+    phi = _phi_from_params(params=params, pad_pixels=pad_pixels)
+    array = _levelset_threshold(phi=phi, periodic=periodic, mask_gradient=mask_gradient)
     return _downsample_spatial_dims(array, params.metadata.smoothing_factor)
 
 
