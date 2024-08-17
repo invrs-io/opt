@@ -1,5 +1,5 @@
 # invrs-opt - Optimization algorithms for inverse design
-`v0.9.0`
+`v0.9.1`
 
 ## Overview
 
