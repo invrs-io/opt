@@ -28,7 +28,7 @@ class PixelLatents(base.LatentsBase):
 tree_util.register_dataclass(
     PixelParams,
     data_fields=["latents"],
-    meta_fields=[],
+    meta_fields=["metadata"],
 )
 tree_util.register_dataclass(
     PixelLatents,
