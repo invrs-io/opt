@@ -27,10 +27,6 @@ def optimization_with_vmap(steps):
             "c": types.Density2DArray(array=jnp.ones((3, 3))),
         }
 
-    def loss_fn(params):
-        flat, _ = flatten_util.ravel_pytree(params)
-        return jnp.sum(jnp.abs(flat**2))
-
     keys = jax.random.split(jax.random.PRNGKey(0))
     opt = lbfgsb.density_lbfgsb(beta=2, maxcor=20)
 
@@ -42,10 +38,9 @@ def optimization_with_vmap(steps):
     @jax.vmap
     def step_fn(state):
         params = opt.params(state)
-        value = jnp.array(1.0, dtype=float)
-        grad = params
-        # value, grad = jax.value_and_grad(loss_fn)(params)
-        state = opt.update(grad=grad, value=value, params=params, state=state)
+        dummy_value = jnp.array(1.0, dtype=float)
+        dummy_grad = jax.tree_util.tree_map(jnp.ones_like, params)
+        state = opt.update(grad=dummy_grad, value=dummy_value, params=params, state=state)
         return state, value
 
     for i in range(steps):
@@ -57,10 +52,9 @@ def optimization_with_vmap(steps):
         state = opt.init(params)
         for _ in range(steps):
             params = opt.params(state)
-            # value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
-            value = jnp.array(1.0, dtype=float)
-            grad = params
-            state = opt.update(grad=grad, value=value, params=params, state=state)
+            dummy_value = jnp.array(1.0, dtype=float)
+            dummy_grad = jax.tree_util.tree_map(jnp.ones_like, params)
+            state = opt.update(grad=dummy_grad, value=dummy_value, params=params, state=state)
 
 
 class VmapTest(unittest.TestCase):
@@ -87,6 +81,12 @@ class VmapTest(unittest.TestCase):
 
     def test_optimization_with_vmap_3_steps(self):
         optimization_with_vmap(steps=3)
+
+    def test_optimization_with_vmap_2_steps(self):
+        optimization_with_vmap(steps=2)
+
+    def test_optimization_with_vmap_1_steps(self):
+        optimization_with_vmap(steps=1)
 
 
 
