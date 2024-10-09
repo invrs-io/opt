@@ -9,29 +9,6 @@ on:
       - cron: "0 13 * * 1"  # Every Monday at 9AM EST
 
 jobs:
-  test_debug_00:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-          cache: "pip"
-          cache-dependency-path: pyproject.toml
-
-      - name: Setup environment
-        run: |
-            python -m pip install --upgrade pip
-            pip install ".[tests,dev]"
-
-      - name: Run Python tests
-        run: |
-          pytest tests/optimizers/test_debug.py::LbfgsbTest::test_trajectory_matches_scipy_bounded_array
-  
   test_debug_01:
     runs-on: ubuntu-latest
     timeout-minutes: 5
