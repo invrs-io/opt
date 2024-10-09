@@ -7,7 +7,6 @@ import argparse
 
 import jax
 import jax.numpy as jnp
-from jax import flatten_util
 from totypes import types
 
 from invrs_opt.optimizers import lbfgsb
@@ -51,8 +50,11 @@ def optimization_with_vmap(steps):
 
     # Test one-at-a-time optimization.
     for k in keys:
+        print(f"key={k}", flush=True)
         params = initial_params_fn(k)
+        print("params initialized", flush=True)
         state = opt.init(params)
+        print("state initialized", flush=True)
         for i in range(steps):
             print(f"one-at-a-time ({i}/{k})", flush=True)
             params = opt.params(state)
