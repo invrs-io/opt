@@ -3,25 +3,32 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
-import unittest
+import argparse
 
 import jax
 import jax.numpy as jnp
-import numpy as onp
-import scipy.optimize as spo
 from jax import flatten_util
-from parameterized import parameterized
 from totypes import types
 
-from invrs_opt.parameterization import filter_project
 from invrs_opt.optimizers import lbfgsb
 
 jax.config.update("jax_enable_x64", True)
 
 
+parser = argparse.ArgumentParser(prog="debug", description="opt debugging")
+parser.add_argument(
+    "--steps",
+    type=int,
+    default=None,
+    help="Number of steps.",
+)
+
 if __name__ == "__main__":
 
     print("running")
+
+    args = parser.parse_args()
+    steps = args.steps
 
     def initial_params_fn(key):
         ka, kb = jax.random.split(key)
@@ -52,7 +59,7 @@ if __name__ == "__main__":
         state = opt.update(grad=grad, value=value, params=params, state=state)
         return state, value
 
-    for i in range(10):
+    for i in range(steps):
         print(f"batch ({i})")
         state, value = step_fn(state)
 
@@ -62,7 +69,7 @@ if __name__ == "__main__":
     for k in keys:
         params = initial_params_fn(k)
         state = opt.init(params)
-        for i in range(10):
+        for i in range(steps):
             print(f"one-at-a-time ({i}/{k})")
             params = opt.params(state)
             value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)

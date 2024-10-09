@@ -60,10 +60,13 @@ def optimization_with_vmap(steps):
 
 
 class VmapTest(unittest.TestCase):
-    def test_optimization_with_vmap(self):
-        optimization_with_vmap(steps=10)
+    def test_optimization_with_vmap_4_steps(self):
+        optimization_with_vmap(steps=4)
 
-    def test_optimization_with_vmap_fewer_steps(self):
+    def test_optimization_with_vmap_3_steps(self):
+        optimization_with_vmap(steps=3)
+
+    def test_optimization_with_vmap_2_steps(self):
         optimization_with_vmap(steps=2)
 
 
