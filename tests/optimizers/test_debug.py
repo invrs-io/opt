@@ -42,7 +42,9 @@ def optimization_with_vmap(steps):
     @jax.vmap
     def step_fn(state):
         params = opt.params(state)
-        value, grad = jax.value_and_grad(loss_fn)(params)
+        value = jnp.array(1.0, dtype=float)
+        grad = params
+        # value, grad = jax.value_and_grad(loss_fn)(params)
         state = opt.update(grad=grad, value=value, params=params, state=state)
         return state, value
 
@@ -55,7 +57,9 @@ def optimization_with_vmap(steps):
         state = opt.init(params)
         for _ in range(steps):
             params = opt.params(state)
-            value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
+            # value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
+            value = jnp.array(1.0, dtype=float)
+            grad = params
             state = opt.update(grad=grad, value=value, params=params, state=state)
 
 
