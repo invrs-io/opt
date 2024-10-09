@@ -25,7 +25,7 @@ parser.add_argument(
 
 if __name__ == "__main__":
 
-    print("running")
+    print("running", flush=True)
 
     args = parser.parse_args()
     steps = args.steps
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     params = jax.vmap(initial_params_fn)(keys)
     state = jax.vmap(opt.init)(params)
 
-    print("state initialized")
+    print("state initialized", flush=True)
 
     @jax.jit
     @jax.vmap
@@ -60,19 +60,19 @@ if __name__ == "__main__":
         return state, value
 
     for i in range(steps):
-        print(f"batch ({i})")
+        print(f"batch ({i})", flush=True)
         state, value = step_fn(state)
 
-    print("batch results complete")
+    print("batch results complete", flush=True)
 
     # Test one-at-a-time optimization.
     for k in keys:
         params = initial_params_fn(k)
         state = opt.init(params)
         for i in range(steps):
-            print(f"one-at-a-time ({i}/{k})")
+            print(f"one-at-a-time ({i}/{k})", flush=True)
             params = opt.params(state)
             value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
             state = opt.update(grad=grad, value=value, params=params, state=state)
 
-    print("one-at-a-time results complete")
+    print("one-at-a-time results complete", flush=True)
