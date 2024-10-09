@@ -16,7 +16,7 @@ maintainers = [
 ]
 
 dependencies = [
-    "jax < 0.4.32",
+    "jax",
     "jaxlib",
     "numpy",
     "requests",
