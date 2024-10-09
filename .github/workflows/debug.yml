@@ -9,29 +9,6 @@ on:
       - cron: "0 13 * * 1"  # Every Monday at 9AM EST
 
 jobs:
-  test_debug_01:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-          cache: "pip"
-          cache-dependency-path: pyproject.toml
-
-      - name: Setup environment
-        run: |
-            python -m pip install --upgrade pip
-            pip install ".[tests,dev]"
-
-      - name: Run Python tests
-        run: |
-          pytest tests/optimizers/test_debug.py::VmapTest::test_optimization_with_vmap
-
   test_debug_02:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -53,7 +30,7 @@ jobs:
 
       - name: Run Python tests
         run: |
-          pytest tests/optimizers/test_debug.py::VmapTest::test_optimization_with_vmap_fewer_steps
+          pytest tests/optimizers/test_debug.py::VmapTest::test_optimization_with_vmap_2_steps
 
   test_debug_03:
     runs-on: ubuntu-latest
@@ -76,4 +53,96 @@ jobs:
 
       - name: Run Python tests
         run: |
-          python tests/optimizers/run_debug.py
+          pytest tests/optimizers/test_debug.py::VmapTest::test_optimization_with_vmap_3_steps
+
+  test_debug_04:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: Setup environment
+        run: |
+            python -m pip install --upgrade pip
+            pip install ".[tests,dev]"
+
+      - name: Run Python tests
+        run: |
+          pytest tests/optimizers/test_debug.py::VmapTest::test_optimization_with_vmap_4_steps
+
+  run_debug_02:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: Setup environment
+        run: |
+            python -m pip install --upgrade pip
+            pip install ".[tests,dev]"
+
+      - name: Run Python tests
+        run: |
+          python tests/optimizers/run_debug.py --steps=2
+
+  run_debug_03:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: Setup environment
+        run: |
+            python -m pip install --upgrade pip
+            pip install ".[tests,dev]"
+
+      - name: Run Python tests
+        run: |
+          python tests/optimizers/run_debug.py --steps=3
+
+  run_debug_10:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: Setup environment
+        run: |
+            python -m pip install --upgrade pip
+            pip install ".[tests,dev]"
+
+      - name: Run Python tests
+        run: |
+          python tests/optimizers/run_debug.py --steps=10
