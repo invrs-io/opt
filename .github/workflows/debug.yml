@@ -31,7 +31,7 @@ jobs:
       - name: Run Python tests
         run: |
           pytest tests/optimizers/test_debug.py::VmapTest::test_optimization_with_vmap
-  
+
   test_debug_02:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -53,4 +53,4 @@ jobs:
 
       - name: Run Python tests
         run: |
-          pytest tests/optimizers/test_debug.py::VmapTest::test_optimization_with_vmap_simplified
+          python tests/optimizers/run_debug.py
