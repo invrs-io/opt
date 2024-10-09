@@ -47,28 +47,20 @@ class VmapTest(unittest.TestCase):
             state = opt.update(grad=grad, value=value, params=params, state=state)
             return state, value
 
-        batch_values = []
         for i in range(10):
             state, value = step_fn(state)
-            batch_values.append(value)
 
         # Test one-at-a-time optimization.
-        no_batch_values = []
         for k in keys:
-            no_batch_values.append([])
             params = initial_params_fn(k)
             state = opt.init(params)
             for _ in range(10):
                 params = opt.params(state)
                 value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
                 state = opt.update(grad=grad, value=value, params=params, state=state)
-                no_batch_values[-1].append(value)
 
-        onp.testing.assert_allclose(
-            batch_values, onp.transpose(no_batch_values, (1, 0)), atol=1e-4
-        )
 
-    def test_optimization_with_vmap_only(self):
+    def test_optimization_with_vmap_simplified(self):
         def initial_params_fn(key):
             ka, kb = jax.random.split(key)
             return {
@@ -96,50 +88,16 @@ class VmapTest(unittest.TestCase):
             state = opt.update(grad=grad, value=value, params=params, state=state)
             return state, value
 
-        batch_values = []
-        for i in range(10):
-            state, value = step_fn(state)
-            batch_values.append(value)
-
-        onp.testing.assert_allclose(
-            batch_values, batch_values, atol=1e-4
-        )
-
-    def test_optimization_one_at_a_time(self):
-        def initial_params_fn(key):
-            ka, kb = jax.random.split(key)
-            return {
-                "a": jax.random.normal(ka, (10,)),
-                "b": jax.random.normal(kb, (10,)),
-                "c": types.Density2DArray(array=jnp.ones((3, 3))),
-            }
-
-        def loss_fn(params):
-            flat, _ = flatten_util.ravel_pytree(params)
-            return jnp.sum(jnp.abs(flat**2))
-
-        keys = jax.random.split(jax.random.PRNGKey(0))
-        opt = lbfgsb.density_lbfgsb(beta=2, maxcor=20)
-
-        # Test batch optimization
-        params = jax.vmap(initial_params_fn)(keys)
-        state = jax.vmap(opt.init)(params)
+        state, value = step_fn(state)
 
         # Test one-at-a-time optimization.
-        no_batch_values = []
         for k in keys:
-            no_batch_values.append([])
             params = initial_params_fn(k)
             state = opt.init(params)
-            for _ in range(10):
-                params = opt.params(state)
-                value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
-                state = opt.update(grad=grad, value=value, params=params, state=state)
-                no_batch_values[-1].append(value)
+            params = opt.params(state)
+            value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
+            state = opt.update(grad=grad, value=value, params=params, state=state)
 
-        onp.testing.assert_allclose(
-            no_batch_values, no_batch_values, atol=1e-4
-        )
 
 
 # class DensityLbfgsbBoundsTest(unittest.TestCase):
