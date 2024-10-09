@@ -76,7 +76,7 @@ jobs:
 
       - name: Run Python tests
         run: |
-          pytest tests/optimizers/test_debug.py::LbfgsbTest::test_initialize
+          pytest tests/optimizers/test_debug.py::LbfgsbInitializeTest
 
   test_debug_03:
     runs-on: ubuntu-latest

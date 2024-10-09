@@ -116,6 +116,98 @@ class LbfgsbInputValidationTest(unittest.TestCase):
                 maxcor=20, line_search_max_steps=invalid_line_search_max_steps
             )
 
+class LbfgsbInitializeTest(unittest.TestCase):
+    @parameterized.expand(
+        [
+            [2.0],
+            [jnp.ones((3,))],
+            [
+                types.BoundedArray(
+                    array=jnp.ones((3,)),
+                    lower_bound=0.0,
+                    upper_bound=1.0,
+                )
+            ],
+            [
+                types.BoundedArray(
+                    array=jnp.ones((3,)),
+                    lower_bound=None,
+                    upper_bound=1.0,
+                )
+            ],
+            [
+                types.BoundedArray(
+                    array=jnp.ones((3,)),
+                    lower_bound=None,
+                    upper_bound=None,
+                )
+            ],
+            [
+                types.BoundedArray(
+                    array=jnp.ones((3,)),
+                    lower_bound=None,
+                    upper_bound=None,
+                )
+            ],
+            [
+                types.BoundedArray(
+                    array=jnp.ones((3,)),
+                    lower_bound=jnp.zeros((3,)),
+                    upper_bound=jnp.ones((3,)),
+                )
+            ],
+            [
+                types.Density2DArray(
+                    array=jnp.ones((3, 3)),
+                    lower_bound=0.0,
+                    upper_bound=1.0,
+                    fixed_solid=None,
+                    fixed_void=None,
+                    minimum_width=1,
+                    minimum_spacing=1,
+                )
+            ],
+            [
+                {
+                    "a": types.Density2DArray(
+                        array=jnp.ones((3, 3)),
+                        lower_bound=0.0,
+                        upper_bound=1.0,
+                        fixed_solid=None,
+                        fixed_void=None,
+                        minimum_width=1,
+                        minimum_spacing=1,
+                    ),
+                    "b": types.BoundedArray(
+                        array=jnp.ones((3,)),
+                        lower_bound=jnp.zeros((3,)),
+                        upper_bound=jnp.ones((3,)),
+                    ),
+                }
+            ],
+            [
+                {
+                    "a": types.Density2DArray(
+                        array=jnp.ones((3, 3)),
+                        lower_bound=0.0,
+                        upper_bound=1.0,
+                        fixed_solid=None,
+                        fixed_void=None,
+                        minimum_width=1,
+                        minimum_spacing=1,
+                    ),
+                    "b": None,
+                }
+            ],
+        ]
+    )
+    def test_initialize(self, params):
+        opt = lbfgsb.density_lbfgsb(maxcor=20, line_search_max_steps=100, beta=2.0)
+        state = opt.init(params)
+        params = opt.params(state)
+        dummy_grad = jax.tree_util.tree_map(jnp.zeros_like, params)
+        state = opt.update(value=0.0, params=params, grad=dummy_grad, state=state)
+
 
 class LbfgsbTest(unittest.TestCase):
     def test_trajectory_matches_scipy_bounded_array(self):
@@ -270,97 +362,6 @@ class LbfgsbTest(unittest.TestCase):
         # numerical differences, since in once case we are using float64 and in
         # the other we are using float32.
         onp.testing.assert_allclose(scipy_values[:10], wrapper_values[:10], rtol=1e-6)
-
-    @parameterized.expand(
-        [
-            [2.0],
-            [jnp.ones((3,))],
-            [
-                types.BoundedArray(
-                    array=jnp.ones((3,)),
-                    lower_bound=0.0,
-                    upper_bound=1.0,
-                )
-            ],
-            [
-                types.BoundedArray(
-                    array=jnp.ones((3,)),
-                    lower_bound=None,
-                    upper_bound=1.0,
-                )
-            ],
-            [
-                types.BoundedArray(
-                    array=jnp.ones((3,)),
-                    lower_bound=None,
-                    upper_bound=None,
-                )
-            ],
-            [
-                types.BoundedArray(
-                    array=jnp.ones((3,)),
-                    lower_bound=None,
-                    upper_bound=None,
-                )
-            ],
-            [
-                types.BoundedArray(
-                    array=jnp.ones((3,)),
-                    lower_bound=jnp.zeros((3,)),
-                    upper_bound=jnp.ones((3,)),
-                )
-            ],
-            [
-                types.Density2DArray(
-                    array=jnp.ones((3, 3)),
-                    lower_bound=0.0,
-                    upper_bound=1.0,
-                    fixed_solid=None,
-                    fixed_void=None,
-                    minimum_width=1,
-                    minimum_spacing=1,
-                )
-            ],
-            [
-                {
-                    "a": types.Density2DArray(
-                        array=jnp.ones((3, 3)),
-                        lower_bound=0.0,
-                        upper_bound=1.0,
-                        fixed_solid=None,
-                        fixed_void=None,
-                        minimum_width=1,
-                        minimum_spacing=1,
-                    ),
-                    "b": types.BoundedArray(
-                        array=jnp.ones((3,)),
-                        lower_bound=jnp.zeros((3,)),
-                        upper_bound=jnp.ones((3,)),
-                    ),
-                }
-            ],
-            [
-                {
-                    "a": types.Density2DArray(
-                        array=jnp.ones((3, 3)),
-                        lower_bound=0.0,
-                        upper_bound=1.0,
-                        fixed_solid=None,
-                        fixed_void=None,
-                        minimum_width=1,
-                        minimum_spacing=1,
-                    ),
-                    "b": None,
-                }
-            ],
-        ]
-    )
-    def test_initialize(self, params):
-        opt = lbfgsb.density_lbfgsb(maxcor=20, line_search_max_steps=100, beta=2.0)
-        state = opt.init(params)
-        params = opt.params(state)
-        dummy_grad = jax.tree_util.tree_map(jnp.zeros_like, params)
-        state = opt.update(value=0.0, params=params, grad=dummy_grad, state=state)
 
     def test_density_lbfgsb_reaches_bounds(self):
         def loss_fn(density):
