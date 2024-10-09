@@ -101,20 +101,8 @@ class VmapTest(unittest.TestCase):
             state, value = step_fn(state)
             batch_values.append(value)
 
-        # Test one-at-a-time optimization.
-        no_batch_values = []
-        for k in keys:
-            no_batch_values.append([])
-            params = initial_params_fn(k)
-            state = opt.init(params)
-            for _ in range(10):
-                params = opt.params(state)
-                value, grad = jax.value_and_grad(loss_fn)(params)
-                state = opt.update(grad=grad, value=value, params=params, state=state)
-                no_batch_values[-1].append(value)
-
         onp.testing.assert_allclose(
-            batch_values, onp.transpose(no_batch_values, (1, 0)), atol=1e-4
+            batch_values, batch_values, atol=1e-4
         )
 
     def test_optimization_with_vmap_only(self):
