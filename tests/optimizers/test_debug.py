@@ -78,6 +78,12 @@ class VmapTest(unittest.TestCase):
     def test_optimization_with_vmap_5_steps(self):
         optimization_with_vmap(steps=5)
 
+    def test_optimization_with_vmap_4_steps(self):
+        optimization_with_vmap(steps=4)
+
+    def test_optimization_with_vmap_3_steps(self):
+        optimization_with_vmap(steps=3)
+
 
 
 # class DensityLbfgsbBoundsTest(unittest.TestCase):
