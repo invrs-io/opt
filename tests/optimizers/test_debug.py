@@ -109,7 +109,7 @@ class VmapTest(unittest.TestCase):
             state = opt.init(params)
             for _ in range(10):
                 params = opt.params(state)
-                value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
+                value, grad = jax.value_and_grad(loss_fn)(params)
                 state = opt.update(grad=grad, value=value, params=params, state=state)
                 no_batch_values[-1].append(value)
 
