@@ -88,15 +88,17 @@ class VmapTest(unittest.TestCase):
             state = opt.update(grad=grad, value=value, params=params, state=state)
             return state, value
 
-        state, value = step_fn(state)
+        for _ in range(1):
+            state, value = step_fn(state)
 
         # Test one-at-a-time optimization.
         for k in keys:
             params = initial_params_fn(k)
             state = opt.init(params)
-            params = opt.params(state)
-            value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
-            state = opt.update(grad=grad, value=value, params=params, state=state)
+            for _ in range(1):
+                params = opt.params(state)
+                value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
+                state = opt.update(grad=grad, value=value, params=params, state=state)
 
 
 
