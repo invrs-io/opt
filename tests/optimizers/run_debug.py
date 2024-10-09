@@ -21,6 +21,8 @@ jax.config.update("jax_enable_x64", True)
 
 if __name__ == "__main__":
 
+    print("running")
+
     def initial_params_fn(key):
         ka, kb = jax.random.split(key)
         return {
@@ -40,6 +42,8 @@ if __name__ == "__main__":
     params = jax.vmap(initial_params_fn)(keys)
     state = jax.vmap(opt.init)(params)
 
+    print("state initialized")
+
     @jax.jit
     @jax.vmap
     def step_fn(state):
@@ -49,13 +53,19 @@ if __name__ == "__main__":
         return state, value
 
     for i in range(10):
+        print(f"batch ({i})")
         state, value = step_fn(state)
+
+    print("batch results complete")
 
     # Test one-at-a-time optimization.
     for k in keys:
         params = initial_params_fn(k)
         state = opt.init(params)
-        for _ in range(10):
+        for i in range(10):
+            print(f"one-at-a-time ({i}/{k})")
             params = opt.params(state)
             value, grad = jax.jit(jax.value_and_grad(loss_fn))(params)
             state = opt.update(grad=grad, value=value, params=params, state=state)
+
+    print("one-at-a-time results complete")
