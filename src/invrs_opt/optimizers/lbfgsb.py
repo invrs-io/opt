@@ -27,6 +27,7 @@ from invrs_opt.parameterization import (
 NDArray = onp.ndarray[Any, Any]
 PyTree = Any
 ElementwiseBound = Union[NDArray, Sequence[Optional[float]]]
+NumpyLbfgsbDict = Dict[str, NDArray]
 JaxLbfgsbDict = Dict[str, jnp.ndarray]
 LbfgsbState = Tuple[int, PyTree, PyTree, JaxLbfgsbDict]
 
@@ -298,7 +299,7 @@ def parameterized_lbfgsb(
     def init_fn(params: PyTree) -> LbfgsbState:
         """Initializes the optimization state."""
 
-        def _init_state_pure(latent_params: PyTree) -> Tuple[PyTree, JaxLbfgsbDict]:
+        def _init_state_pure(latent_params: PyTree) -> Tuple[PyTree, NumpyLbfgsbDict]:
             lower_bound = types.extract_lower_bound(latent_params)
             upper_bound = types.extract_upper_bound(latent_params)
             scipy_lbfgsb_state = ScipyLbfgsbState.init(
@@ -311,7 +312,7 @@ def parameterized_lbfgsb(
                 gtol=gtol,
             )
             latent_params = _to_pytree(scipy_lbfgsb_state.x, latent_params)
-            return latent_params, scipy_lbfgsb_state.to_jax()
+            return latent_params, scipy_lbfgsb_state.to_dict()
 
         latent_params = _init_latents(params)
         metadata, latents = param_base.partition_density_metadata(latent_params)
@@ -345,7 +346,7 @@ def parameterized_lbfgsb(
             flat_latent_grad: PyTree,
             value: jnp.ndarray,
             jax_lbfgsb_state: JaxLbfgsbDict,
-        ) -> Tuple[PyTree, JaxLbfgsbDict]:
+        ) -> Tuple[PyTree, NumpyLbfgsbDict]:
             assert onp.size(value) == 1
             scipy_lbfgsb_state = ScipyLbfgsbState.from_jax(jax_lbfgsb_state)
             scipy_lbfgsb_state.update(
@@ -353,7 +354,7 @@ def parameterized_lbfgsb(
                 value=onp.array(value, dtype=onp.float64),
             )
             flat_latent_params = jnp.asarray(scipy_lbfgsb_state.x)
-            return flat_latent_params, scipy_lbfgsb_state.to_jax()
+            return flat_latent_params, scipy_lbfgsb_state.to_dict()
 
         step, _, latent_params, jax_lbfgsb_state = state
         metadata, latents = param_base.partition_density_metadata(latent_params)
@@ -695,29 +696,29 @@ class ScipyLbfgsbState:
         _validate_array_dtype(self._upper_bound, onp.float64)
         _validate_array_dtype(self._bound_type, int)
 
-    def to_jax(self) -> Dict[str, jnp.ndarray]:
+    def to_dict(self) -> NumpyLbfgsbDict:
         """Generates a dictionary of jax arrays defining the state."""
         return dict(
-            x=jnp.asarray(self.x),
-            converged=jnp.asarray(self.converged),
-            _maxcor=jnp.asarray(self._maxcor),
-            _line_search_max_steps=jnp.asarray(self._line_search_max_steps),
-            _ftol=jnp.asarray(self._ftol),
-            _gtol=jnp.asarray(self._gtol),
-            _wa=jnp.asarray(self._wa),
-            _iwa=jnp.asarray(self._iwa),
+            x=onp.asarray(self.x),
+            converged=onp.asarray(self.converged),
+            _maxcor=onp.asarray(self._maxcor),
+            _line_search_max_steps=onp.asarray(self._line_search_max_steps),
+            _ftol=onp.asarray(self._ftol),
+            _gtol=onp.asarray(self._gtol),
+            _wa=onp.asarray(self._wa),
+            _iwa=onp.asarray(self._iwa),
             _task=_array_from_s60_str(self._task),
             _csave=_array_from_s60_str(self._csave),
-            _lsave=jnp.asarray(self._lsave),
-            _isave=jnp.asarray(self._isave),
-            _dsave=jnp.asarray(self._dsave),
-            _lower_bound=jnp.asarray(self._lower_bound),
-            _upper_bound=jnp.asarray(self._upper_bound),
-            _bound_type=jnp.asarray(self._bound_type),
+            _lsave=onp.asarray(self._lsave),
+            _isave=onp.asarray(self._isave),
+            _dsave=onp.asarray(self._dsave),
+            _lower_bound=onp.asarray(self._lower_bound),
+            _upper_bound=onp.asarray(self._upper_bound),
+            _bound_type=onp.asarray(self._bound_type),
         )
 
     @classmethod
-    def from_jax(cls, state_dict: Dict[str, jnp.ndarray]) -> "ScipyLbfgsbState":
+    def from_jax(cls, state_dict: JaxLbfgsbDict) -> "ScipyLbfgsbState":
         """Converts a dictionary of jax arrays to a `ScipyLbfgsbState`."""
         return ScipyLbfgsbState(
             x=onp.array(state_dict["x"], dtype=onp.float64),
@@ -728,8 +729,8 @@ class ScipyLbfgsbState:
             _gtol=onp.asarray(state_dict["_gtol"], dtype=onp.float64),
             _wa=onp.array(state_dict["_wa"], onp.float64),
             _iwa=onp.array(state_dict["_iwa"], dtype=FORTRAN_INT),
-            _task=_s60_str_from_array(state_dict["_task"]),
-            _csave=_s60_str_from_array(state_dict["_csave"]),
+            _task=_s60_str_from_array(onp.asarray(state_dict["_task"])),
+            _csave=_s60_str_from_array(onp.asarray(state_dict["_csave"])),
             _lsave=onp.array(state_dict["_lsave"], dtype=FORTRAN_INT),
             _isave=onp.array(state_dict["_isave"], dtype=FORTRAN_INT),
             _dsave=onp.array(state_dict["_dsave"], dtype=onp.float64),
@@ -896,21 +897,17 @@ def _configure_bounds(
     )
 
 
-def _array_from_s60_str(s60_str: NDArray) -> jnp.ndarray:
+def _array_from_s60_str(s60_str: NDArray) -> NDArray:
     """Return a jax array for a numpy s60 string."""
     assert s60_str.shape == (1,)
     chars = [int(o) for o in s60_str[0]]
     chars.extend([32] * (59 - len(chars)))
-    return jnp.asarray(chars, dtype=int)
+    return onp.asarray(chars, dtype=int)
 
 
-def _s60_str_from_array(array: jnp.ndarray) -> NDArray:
+def _s60_str_from_array(array: NDArray) -> NDArray:
     """Return a numpy s60 string for a jax array."""
     return onp.asarray(
-        [
-            b"".join(
-                int(i).to_bytes(length=1, byteorder="big") for i in onp.array(array)
-            )
-        ],
+        [b"".join(int(i).to_bytes(length=1, byteorder="big") for i in array)],
         dtype="S60",
     )
