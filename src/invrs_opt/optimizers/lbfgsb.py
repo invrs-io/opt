@@ -3,7 +3,6 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
-import copy
 import dataclasses
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
@@ -722,11 +721,11 @@ class ScipyLbfgsbState:
         """Converts a dictionary of jax arrays to a `ScipyLbfgsbState`."""
         return ScipyLbfgsbState(
             x=onp.array(state_dict["x"], dtype=onp.float64),
-            converged=onp.array(state_dict["converged"], dtype=bool),
+            converged=onp.asarray(state_dict["converged"], dtype=bool),
             _maxcor=int(state_dict["_maxcor"]),
             _line_search_max_steps=int(state_dict["_line_search_max_steps"]),
-            _ftol=onp.array(state_dict["_ftol"], dtype=onp.float64),
-            _gtol=onp.array(state_dict["_gtol"], dtype=onp.float64),
+            _ftol=onp.asarray(state_dict["_ftol"], dtype=onp.float64),
+            _gtol=onp.asarray(state_dict["_gtol"], dtype=onp.float64),
             _wa=onp.array(state_dict["_wa"], onp.float64),
             _iwa=onp.array(state_dict["_iwa"], dtype=FORTRAN_INT),
             _task=_s60_str_from_array(state_dict["_task"]),
@@ -734,9 +733,9 @@ class ScipyLbfgsbState:
             _lsave=onp.array(state_dict["_lsave"], dtype=FORTRAN_INT),
             _isave=onp.array(state_dict["_isave"], dtype=FORTRAN_INT),
             _dsave=onp.array(state_dict["_dsave"], dtype=onp.float64),
-            _lower_bound=onp.array(state_dict["_lower_bound"], dtype=onp.float64),
-            _upper_bound=onp.array(state_dict["_upper_bound"], dtype=onp.float64),
-            _bound_type=onp.array(state_dict["_bound_type"], dtype=int),
+            _lower_bound=onp.asarray(state_dict["_lower_bound"], dtype=onp.float64),
+            _upper_bound=onp.asarray(state_dict["_upper_bound"], dtype=onp.float64),
+            _bound_type=onp.asarray(state_dict["_bound_type"], dtype=int),
         )
 
     @classmethod
@@ -908,6 +907,10 @@ def _array_from_s60_str(s60_str: NDArray) -> jnp.ndarray:
 def _s60_str_from_array(array: jnp.ndarray) -> NDArray:
     """Return a numpy s60 string for a jax array."""
     return onp.asarray(
-        [b"".join(int(i).to_bytes(length=1, byteorder="big") for i in array)],
+        [
+            b"".join(
+                int(i).to_bytes(length=1, byteorder="big") for i in onp.asarray(array)
+            )
+        ],
         dtype="S60",
     )
