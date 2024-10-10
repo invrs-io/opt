@@ -312,14 +312,14 @@ def parameterized_lbfgsb(
                 gtol=gtol,
             )
             latent_params = _to_pytree(scipy_lbfgsb_state.x, latent_params)
-            return latent_params, scipy_lbfgsb_state.to_jax()
+            jax_lbfgsb_state = scipy_lbfgsb_state.to_jax()
+            jax.block_until_ready((latent_params, jax_lbfgsb_state))
+            return latent_params, jax_lbfgsb_state
 
         latent_params = _init_latents(params)
         metadata, latents = param_base.partition_density_metadata(latent_params)
         latents, jax_lbfgsb_state = jax.pure_callback(
-            _init_state_pure,
-            jax.block_until_ready(_example_state(latents, maxcor)),
-            jax.block_until_ready(latents),
+            _init_state_pure, _example_state(latents, maxcor), latents
         )
         latent_params = param_base.combine_density_metadata(metadata, latents)
         return (
@@ -356,7 +356,9 @@ def parameterized_lbfgsb(
                 value=onp.array(value, dtype=onp.float64),
             )
             flat_latent_params = jnp.asarray(scipy_lbfgsb_state.x)
-            return flat_latent_params, scipy_lbfgsb_state.to_jax()
+            jax_lbfgsb_state = scipy_lbfgsb_state.to_jax()
+            jax.block_until_ready((flat_latent_params, jax_lbfgsb_state))
+            return flat_latent_params, jax_lbfgsb_state
 
         step, _, latent_params, jax_lbfgsb_state = state
         metadata, latents = param_base.partition_density_metadata(latent_params)
@@ -399,10 +401,10 @@ def parameterized_lbfgsb(
 
         flat_latents, jax_lbfgsb_state = jax.pure_callback(
             _update_pure,
-            jax.block_until_ready((flat_latents_grad, jax_lbfgsb_state)),
-            jax.block_until_ready(flat_latents_grad),
-            jax.block_until_ready(value),
-            jax.block_until_ready(jax_lbfgsb_state),
+            (flat_latents_grad, jax_lbfgsb_state),
+            flat_latents_grad,
+            value,
+            jax_lbfgsb_state,
         )
         latents = unflatten_fn(flat_latents)
         latent_params = param_base.combine_density_metadata(metadata, latents)
