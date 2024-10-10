@@ -3,6 +3,7 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
+import copy
 import dataclasses
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
@@ -719,6 +720,7 @@ class ScipyLbfgsbState:
     @classmethod
     def from_jax(cls, state_dict: Dict[str, jnp.ndarray]) -> "ScipyLbfgsbState":
         """Converts a dictionary of jax arrays to a `ScipyLbfgsbState`."""
+        state_dict = copy.deepcopy(state_dict)
         return ScipyLbfgsbState(
             x=onp.array(state_dict["x"], dtype=onp.float64),
             converged=onp.asarray(state_dict["converged"], dtype=bool),
@@ -907,10 +909,6 @@ def _array_from_s60_str(s60_str: NDArray) -> jnp.ndarray:
 def _s60_str_from_array(array: jnp.ndarray) -> NDArray:
     """Return a numpy s60 string for a jax array."""
     return onp.asarray(
-        [
-            b"".join(
-                int(i).to_bytes(length=1, byteorder="big") for i in onp.asarray(array)
-            )
-        ],
+        [b"".join(int(i).to_bytes(length=1, byteorder="big") for i in array)],
         dtype="S60",
     )

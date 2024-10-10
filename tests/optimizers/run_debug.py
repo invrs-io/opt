@@ -25,13 +25,14 @@ def optimization_with_vmap(steps):
         params = opt.params(state)
         dummy_value = jnp.array(1.0, dtype=float)
         dummy_grad = jax.tree_util.tree_map(jnp.ones_like, params)
-        state = opt.update(grad=dummy_grad, value=dummy_value, params=params, state=state)
+        state = opt.update(
+            grad=dummy_grad, value=dummy_value, params=params, state=state
+        )
         return state, dummy_value
 
     for i in range(steps):
         print(f"vmap step {i}", flush=True)
         state, value = step_fn(state)
-    
 
 
 parser = argparse.ArgumentParser(prog="debug", description="opt debugging")
