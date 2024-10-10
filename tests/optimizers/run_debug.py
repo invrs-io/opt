@@ -15,7 +15,6 @@ jax.config.update("jax_enable_x64", True)
 
 
 def optimization_with_vmap(steps):
-
     print("running", flush=True)
 
     def initial_params_fn(key):
@@ -41,7 +40,9 @@ def optimization_with_vmap(steps):
         params = opt.params(state)
         dummy_value = jnp.array(1.0, dtype=float)
         dummy_grad = jax.tree_util.tree_map(jnp.ones_like, params)
-        state = opt.update(grad=dummy_grad, value=dummy_value, params=params, state=state)
+        state = opt.update(
+            grad=dummy_grad, value=dummy_value, params=params, state=state
+        )
         return state, dummy_value
 
     for i in range(steps):
@@ -60,7 +61,9 @@ def optimization_with_vmap(steps):
             params = opt.params(state)
             dummy_value = jnp.array(1.0, dtype=float)
             dummy_grad = jax.tree_util.tree_map(jnp.ones_like, params)
-            state = opt.update(grad=dummy_grad, value=dummy_value, params=params, state=state)
+            state = opt.update(
+                grad=dummy_grad, value=dummy_value, params=params, state=state
+            )
 
     print("one-at-a-time results complete", flush=True)
 
@@ -74,6 +77,5 @@ parser.add_argument(
 )
 
 if __name__ == "__main__":
-
     args = parser.parse_args()
     optimization_with_vmap(steps=args.steps)

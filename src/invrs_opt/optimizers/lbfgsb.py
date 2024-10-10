@@ -317,7 +317,9 @@ def parameterized_lbfgsb(
         latent_params = _init_latents(params)
         metadata, latents = param_base.partition_density_metadata(latent_params)
         latents, jax_lbfgsb_state = jax.pure_callback(
-            _init_state_pure, _example_state(latents, maxcor), latents
+            _init_state_pure,
+            jax.block_until_ready(_example_state(latents, maxcor)),
+            jax.block_until_ready(latents),
         )
         latent_params = param_base.combine_density_metadata(metadata, latents)
         return (
@@ -397,10 +399,10 @@ def parameterized_lbfgsb(
 
         flat_latents, jax_lbfgsb_state = jax.pure_callback(
             _update_pure,
-            (flat_latents_grad, jax_lbfgsb_state),
-            flat_latents_grad,
-            value,
-            jax_lbfgsb_state,
+            jax.block_until_ready((flat_latents_grad, jax_lbfgsb_state)),
+            jax.block_until_ready(flat_latents_grad),
+            jax.block_until_ready(value),
+            jax.block_until_ready(jax_lbfgsb_state),
         )
         latents = unflatten_fn(flat_latents)
         latent_params = param_base.combine_density_metadata(metadata, latents)

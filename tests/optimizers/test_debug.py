@@ -18,6 +18,7 @@ from invrs_opt.optimizers import lbfgsb
 
 jax.config.update("jax_enable_x64", True)
 
+
 def optimization_with_vmap(steps):
     def initial_params_fn(key):
         ka, kb = jax.random.split(key)
@@ -40,7 +41,9 @@ def optimization_with_vmap(steps):
         params = opt.params(state)
         dummy_value = jnp.array(1.0, dtype=float)
         dummy_grad = jax.tree_util.tree_map(jnp.ones_like, params)
-        state = opt.update(grad=dummy_grad, value=dummy_value, params=params, state=state)
+        state = opt.update(
+            grad=dummy_grad, value=dummy_value, params=params, state=state
+        )
         return state, dummy_value
 
     for i in range(steps):
@@ -54,7 +57,9 @@ def optimization_with_vmap(steps):
             params = opt.params(state)
             dummy_value = jnp.array(1.0, dtype=float)
             dummy_grad = jax.tree_util.tree_map(jnp.ones_like, params)
-            state = opt.update(grad=dummy_grad, value=dummy_value, params=params, state=state)
+            state = opt.update(
+                grad=dummy_grad, value=dummy_value, params=params, state=state
+            )
 
 
 class VmapTest(unittest.TestCase):
@@ -87,7 +92,6 @@ class VmapTest(unittest.TestCase):
 
     def test_optimization_with_vmap_1_steps(self):
         optimization_with_vmap(steps=1)
-
 
 
 # class DensityLbfgsbBoundsTest(unittest.TestCase):
