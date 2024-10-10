@@ -312,9 +312,7 @@ def parameterized_lbfgsb(
                 gtol=gtol,
             )
             latent_params = _to_pytree(scipy_lbfgsb_state.x, latent_params)
-            jax_lbfgsb_state = scipy_lbfgsb_state.to_jax()
-            jax.block_until_ready((latent_params, jax_lbfgsb_state))
-            return latent_params, jax_lbfgsb_state
+            return latent_params, scipy_lbfgsb_state.to_jax()
 
         latent_params = _init_latents(params)
         metadata, latents = param_base.partition_density_metadata(latent_params)
@@ -356,9 +354,7 @@ def parameterized_lbfgsb(
                 value=onp.array(value, dtype=onp.float64),
             )
             flat_latent_params = jnp.asarray(scipy_lbfgsb_state.x)
-            jax_lbfgsb_state = scipy_lbfgsb_state.to_jax()
-            jax.block_until_ready((flat_latent_params, jax_lbfgsb_state))
-            return flat_latent_params, jax_lbfgsb_state
+            return flat_latent_params, scipy_lbfgsb_state.to_jax()
 
         step, _, latent_params, jax_lbfgsb_state = state
         metadata, latents = param_base.partition_density_metadata(latent_params)
@@ -724,14 +720,13 @@ class ScipyLbfgsbState:
     @classmethod
     def from_jax(cls, state_dict: Dict[str, jnp.ndarray]) -> "ScipyLbfgsbState":
         """Converts a dictionary of jax arrays to a `ScipyLbfgsbState`."""
-        state_dict = copy.deepcopy(state_dict)
         return ScipyLbfgsbState(
             x=onp.array(state_dict["x"], dtype=onp.float64),
-            converged=onp.asarray(state_dict["converged"], dtype=bool),
+            converged=onp.array(state_dict["converged"], dtype=bool),
             _maxcor=int(state_dict["_maxcor"]),
             _line_search_max_steps=int(state_dict["_line_search_max_steps"]),
-            _ftol=onp.asarray(state_dict["_ftol"], dtype=onp.float64),
-            _gtol=onp.asarray(state_dict["_gtol"], dtype=onp.float64),
+            _ftol=onp.array(state_dict["_ftol"], dtype=onp.float64),
+            _gtol=onp.array(state_dict["_gtol"], dtype=onp.float64),
             _wa=onp.array(state_dict["_wa"], onp.float64),
             _iwa=onp.array(state_dict["_iwa"], dtype=FORTRAN_INT),
             _task=_s60_str_from_array(state_dict["_task"]),
@@ -739,9 +734,9 @@ class ScipyLbfgsbState:
             _lsave=onp.array(state_dict["_lsave"], dtype=FORTRAN_INT),
             _isave=onp.array(state_dict["_isave"], dtype=FORTRAN_INT),
             _dsave=onp.array(state_dict["_dsave"], dtype=onp.float64),
-            _lower_bound=onp.asarray(state_dict["_lower_bound"], dtype=onp.float64),
-            _upper_bound=onp.asarray(state_dict["_upper_bound"], dtype=onp.float64),
-            _bound_type=onp.asarray(state_dict["_bound_type"], dtype=int),
+            _lower_bound=onp.array(state_dict["_lower_bound"], dtype=onp.float64),
+            _upper_bound=onp.array(state_dict["_upper_bound"], dtype=onp.float64),
+            _bound_type=onp.array(state_dict["_bound_type"], dtype=int),
         )
 
     @classmethod
