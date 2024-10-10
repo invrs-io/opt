@@ -909,6 +909,10 @@ def _array_from_s60_str(s60_str: NDArray) -> jnp.ndarray:
 def _s60_str_from_array(array: jnp.ndarray) -> NDArray:
     """Return a numpy s60 string for a jax array."""
     return onp.asarray(
-        [b"".join(int(i).to_bytes(length=1, byteorder="big") for i in array)],
+        [
+            b"".join(
+                int(i).to_bytes(length=1, byteorder="big") for i in onp.array(array)
+            )
+        ],
         dtype="S60",
     )
