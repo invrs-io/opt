@@ -55,3 +55,25 @@ class GaussianLevelsetTest(unittest.TestCase):
             return jnp.sum(params.array)
 
         jit_fn(latent_params)
+
+    def test_constraints_grad_has_no_nan(self):
+        array = onp.zeros((20, 20))
+        array[:, :10] = 1
+
+        density = types.Density2DArray(array=array, lower_bound=0, upper_bound=1)
+
+        parameterization = gaussian_levelset.gaussian_levelset()
+        latent_params = parameterization.from_density(density)
+
+        latents = latent_params.latents
+        metadata = latent_params.metadata
+
+        def _loss_fn(latents):
+            latent_params = gaussian_levelset.GaussianLevelsetParams(
+                latents=latents, metadata=metadata
+            )
+            constraints = parameterization.constraints(latent_params)
+            return jnp.sum(constraints**2)
+
+        grad = jax.grad(_loss_fn)(latents)
+        self.assertFalse(onp.any(onp.isnan(grad.amplitude)))
