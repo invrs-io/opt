@@ -25,7 +25,7 @@ DEFAULT_LENGTH_SCALE_CONSTRAINT_WEIGHT: float = 1.0
 DEFAULT_CURVATURE_CONSTRAINT_WEIGHT: float = 2.0
 DEFAULT_FIXED_PIXEL_CONSTRAINT_WEIGHT: float = 10.0
 DEFAULT_INIT_STEPS: int = 50
-DEFAULT_INIT_OPTIMIZER: optax.GradientTransformation = optax.adam(1e-1)
+DEFAULT_INIT_OPTIMIZER: optax.GradientTransformation = optax.adam(1e-2)
 
 
 @dataclasses.dataclass
@@ -218,33 +218,16 @@ def gaussian_levelset(
         pad_pixels: int = 2,
     ) -> jnp.ndarray:
         """Computes constraints associated with the params."""
-        length_scale_constraint, curvature_constraint = _levelset_constraints(
-            params,
-            beta=length_scale_constraint_beta,
+        return analytical_constraints(
+            params=params,
             length_scale_constraint_factor=length_scale_constraint_factor,
-            pad_pixels=pad_pixels,
-        )
-        fixed_pixel_constraint = _fixed_pixel_constraint(
-            params,
+            length_scale_constraint_beta=length_scale_constraint_beta,
+            length_scale_constraint_weight=length_scale_constraint_weight,
+            curvature_constraint_weight=curvature_constraint_weight,
+            fixed_pixel_constraint_weight=fixed_pixel_constraint_weight,
             mask_gradient=mask_gradient,
             pad_pixels=pad_pixels,
         )
-
-        constraints = jnp.stack(
-            [
-                length_scale_constraint * length_scale_constraint_weight,
-                curvature_constraint * curvature_constraint_weight,
-                fixed_pixel_constraint * fixed_pixel_constraint_weight,
-            ],
-            axis=-1,
-        )
-
-        # Normalize constraints to make them (somewhat) resolution-independent.
-        example_density = _example_density(params)
-        length_scale = 0.5 * (
-            example_density.minimum_spacing + example_density.minimum_width
-        )
-        return constraints / length_scale**2
 
     def update_fn(params: GaussianLevelsetParams, step: int) -> GaussianLevelsetParams:
         """Perform updates to `params` required for the given `step`."""
@@ -401,6 +384,46 @@ def _phi_from_params(
 # -----------------------------------------------------------------------------
 # Functions to compute constraints.
 # -----------------------------------------------------------------------------
+
+
+def analytical_constraints(
+    params: GaussianLevelsetParams,
+    length_scale_constraint_factor: float,
+    length_scale_constraint_beta: float,
+    length_scale_constraint_weight: float,
+    curvature_constraint_weight: float,
+    fixed_pixel_constraint_weight: float,
+    mask_gradient: bool,
+    pad_pixels: int,
+) -> jnp.ndarray:
+    """Computes analytical levelset constraints associated with the params."""
+    length_scale_constraint, curvature_constraint = _levelset_constraints(
+        params,
+        beta=length_scale_constraint_beta,
+        length_scale_constraint_factor=length_scale_constraint_factor,
+        pad_pixels=pad_pixels,
+    )
+    fixed_pixel_constraint = _fixed_pixel_constraint(
+        params,
+        mask_gradient=mask_gradient,
+        pad_pixels=pad_pixels,
+    )
+
+    constraints = jnp.stack(
+        [
+            length_scale_constraint * length_scale_constraint_weight,
+            curvature_constraint * curvature_constraint_weight,
+            fixed_pixel_constraint * fixed_pixel_constraint_weight,
+        ],
+        axis=-1,
+    )
+
+    # Normalize constraints to make them (somewhat) resolution-independent.
+    example_density = _example_density(params)
+    length_scale = 0.5 * (
+        example_density.minimum_spacing + example_density.minimum_width
+    )
+    return constraints / length_scale**2
 
 
 def _fixed_pixel_constraint(
