@@ -1,7 +1,7 @@
 [project]
 
 name = "invrs_opt"
-version = "v0.9.3"
+version = "v0.9.4"
 description = "Algorithms for inverse design"
 keywords = ["topology", "optimization", "jax", "inverse design"]
 readme = "README.md"
