@@ -16,8 +16,8 @@ from invrs_opt.parameterization import base, transforms
 
 PyTree = Any
 
-DEFAULT_LENGTH_SCALE_SPACING_FACTOR: float = 2.0
-DEFAULT_LENGTH_SCALE_FWHM_FACTOR: float = 1.0
+DEFAULT_LENGTH_SCALE_SPACING_FACTOR: float = 4.0
+DEFAULT_LENGTH_SCALE_FWHM_FACTOR: float = 0.5
 DEFAULT_LENGTH_SCALE_CONSTRAINT_FACTOR: float = 1.15
 DEFAULT_SMOOTHING_FACTOR: int = 2
 DEFAULT_LENGTH_SCALE_CONSTRAINT_BETA: float = 0.333
@@ -509,11 +509,13 @@ def _levelset_constraints(
     )
 
     d = minimum_length_scale * length_scale_constraint_factor
-    length_scale_constraint = (
-        jnp.abs(phi_vv) / (jnp.pi / d * jnp.abs(phi) + beta * phi_v) - jnp.pi / d
-    )
+    denom = jnp.pi / d * jnp.abs(phi) + beta * phi_v
+    denom_safe = jnp.where(jnp.isclose(phi_vv, 0.0), 1.0, denom)
+    length_scale_constraint = jnp.abs(phi_vv) / denom_safe - jnp.pi / d
+
+    curvature_denom_safe = jnp.where(jnp.isclose(phi_v, 0.0), 1.0, phi)
     curvature_constraint = (
-        jnp.abs(inverse_radius * jnp.arctan(phi_v / phi)) - jnp.pi / d
+        jnp.abs(inverse_radius * jnp.arctan(phi_v / curvature_denom_safe)) - jnp.pi / d
     )
 
     # Downsample so that constraints shape matches the density shape.
