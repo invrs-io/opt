@@ -25,7 +25,7 @@ DEFAULT_LENGTH_SCALE_CONSTRAINT_WEIGHT: float = 1.0
 DEFAULT_CURVATURE_CONSTRAINT_WEIGHT: float = 2.0
 DEFAULT_FIXED_PIXEL_CONSTRAINT_WEIGHT: float = 10.0
 DEFAULT_INIT_STEPS: int = 50
-DEFAULT_INIT_OPTIMIZER: optax.GradientTransformation = optax.adam(1e-2)
+DEFAULT_INIT_OPTIMIZER: optax.GradientTransformation = optax.adam(1e-1)
 
 
 @dataclasses.dataclass
