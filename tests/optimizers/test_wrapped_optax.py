@@ -3,6 +3,7 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
+import copy
 import dataclasses
 import unittest
 
@@ -148,7 +149,7 @@ class WrappedOptaxTest(unittest.TestCase):
 
         onp.testing.assert_array_equal(values, expected_values)
 
-    def test_trajectory_matches_scipy_density_2d(self):
+    def test_trajectory_matches_optax_density_2d(self):
         initial_params = {
             "a": jnp.asarray([1.0, 2.0]),
             "b": types.BoundedArray(
@@ -391,8 +392,12 @@ class StepVariableParameterizationTest(unittest.TestCase):
         # at each step.
         p = filter_project.filter_project(beta=1)
 
-        def update_fn(params, step):
-            del step
+        _original_update_fn = copy.deepcopy(p.update)
+
+        def update_fn(step, params, value, updates):
+            params = _original_update_fn(
+                step=step, params=params, value=value, updates=updates
+            )
             params.metadata.beta += 1
             return params
 

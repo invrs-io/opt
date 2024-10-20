@@ -229,10 +229,20 @@ def gaussian_levelset(
             pad_pixels=pad_pixels,
         )
 
-    def update_fn(params: GaussianLevelsetParams, step: int) -> GaussianLevelsetParams:
+    def update_fn(
+        params: GaussianLevelsetParams,
+        updates: GaussianLevelsetParams,
+        value: jnp.ndarray,
+        step: int,
+    ) -> GaussianLevelsetParams:
         """Perform updates to `params` required for the given `step`."""
-        del step
-        return params
+        del step, value
+        return GaussianLevelsetParams(
+            latents=tree_util.tree_map(
+                lambda a, b: a + b, params.latents, updates.latents
+            ),
+            metadata=params.metadata,
+        )
 
     return base.Density2DParameterization(
         to_density=to_density_fn,

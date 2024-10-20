@@ -115,10 +115,20 @@ def filter_project(beta: float) -> base.Density2DParameterization:
         del params
         return jnp.asarray(0.0)
 
-    def update_fn(params: FilterProjectParams, step: int) -> FilterProjectParams:
+    def update_fn(
+        params: FilterProjectParams,
+        updates: FilterProjectParams,
+        value: jnp.ndarray,
+        step: int,
+    ) -> FilterProjectParams:
         """Perform updates to `params` required for the given `step`."""
-        del step
-        return params
+        del step, value
+        return FilterProjectParams(
+            latents=tree_util.tree_map(
+                lambda a, b: a + b, params.latents, updates.latents
+            ),
+            metadata=params.metadata,
+        )
 
     return base.Density2DParameterization(
         to_density=to_density_fn,

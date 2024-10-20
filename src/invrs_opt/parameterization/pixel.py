@@ -52,9 +52,20 @@ def pixel() -> base.Density2DParameterization:
         del params
         return jnp.asarray(0.0)
 
-    def update_fn(params: PixelParams, step: int) -> PixelParams:
-        del step
-        return params
+    def update_fn(
+        params: PixelParams,
+        updates: PixelParams,
+        value: jnp.ndarray,
+        step: int,
+    ) -> PixelParams:
+        """Perform updates to `params` required for the given `step`."""
+        del step, value
+        return PixelParams(
+            latents=tree_util.tree_map(
+                lambda a, b: a + b, params.latents, updates.latents
+            ),
+            metadata=params.metadata,
+        )
 
     return base.Density2DParameterization(
         from_density=from_density_fn,

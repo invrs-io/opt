@@ -7,6 +7,7 @@ import dataclasses
 import inspect
 from typing import Any, Protocol
 
+import jax.numpy as jnp
 import optax  # type: ignore[import-untyped]
 from totypes import json_utils
 
@@ -34,7 +35,7 @@ class UpdateFn(Protocol):
         self,
         *,
         grad: PyTree,
-        value: float,
+        value: jnp.ndarray,
         params: PyTree,
         state: PyTree,
     ) -> PyTree:

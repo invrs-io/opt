@@ -132,7 +132,11 @@ def optimizer_client(
         response = json.loads(get_response.text)
         return json_utils.pytree_from_json(response[labels.PARAMS])
 
-    return base.Optimizer(init=init_fn, update=update_fn, params=params_fn)
+    return base.Optimizer(
+        init=init_fn,
+        update=update_fn,  # type: ignore[arg-type]
+        params=params_fn,
+    )
 
 
 # -----------------------------------------------------------------------------
