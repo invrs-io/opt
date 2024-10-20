@@ -335,7 +335,7 @@ def parameterized_lbfgsb(
     def update_fn(
         *,
         grad: PyTree,
-        value: float,
+        value: jnp.ndarray,
         params: PyTree,
         state: LbfgsbState,
     ) -> LbfgsbState:
@@ -349,12 +349,14 @@ def parameterized_lbfgsb(
         ) -> Tuple[PyTree, NumpyLbfgsbDict]:
             assert onp.size(value) == 1
             scipy_lbfgsb_state = ScipyLbfgsbState.from_jax(jax_lbfgsb_state)
+            flat_latent_params = scipy_lbfgsb_state.x.copy()
             scipy_lbfgsb_state.update(
                 grad=onp.array(flat_latent_grad, dtype=onp.float64),
                 value=onp.array(value, dtype=onp.float64),
             )
-            flat_latent_params = jnp.asarray(scipy_lbfgsb_state.x)
-            return flat_latent_params, scipy_lbfgsb_state.to_dict()
+            updated_flat_latent_params = scipy_lbfgsb_state.x
+            flat_latent_updates = updated_flat_latent_params - flat_latent_params
+            return flat_latent_updates, scipy_lbfgsb_state.to_dict()
 
         step, _, latent_params, jax_lbfgsb_state = state
         metadata, latents = param_base.partition_density_metadata(latent_params)
@@ -395,16 +397,21 @@ def parameterized_lbfgsb(
             latents_grad
         )  # type: ignore[no-untyped-call]
 
-        flat_latents, jax_lbfgsb_state = jax.pure_callback(
+        flat_latent_updates, jax_lbfgsb_state = jax.pure_callback(
             _update_pure,
             (flat_latents_grad, jax_lbfgsb_state),
             flat_latents_grad,
             value,
             jax_lbfgsb_state,
         )
-        latents = unflatten_fn(flat_latents)
-        latent_params = param_base.combine_density_metadata(metadata, latents)
-        latent_params = _update_parameterized_densities(latent_params, step)
+        latent_updates = unflatten_fn(flat_latent_updates)
+        latent_params = _apply_updates(
+            params=latent_params,
+            updates=param_base.combine_density_metadata(metadata, latent_updates),
+            value=value,
+            step=step,
+        )
+        latent_params = _clip(latent_params)
         params = _params_from_latent_params(latent_params)
         return step + 1, params, latent_params, jax_lbfgsb_state
 
@@ -433,15 +440,24 @@ def parameterized_lbfgsb(
             is_leaf=_is_parameterized_density,
         )
 
-    def _update_parameterized_densities(latent_params: PyTree, step: int) -> PyTree:
-        def _update_leaf(leaf: Any) -> Any:
-            if not _is_parameterized_density(leaf):
-                return leaf
-            return density_parameterization.update(leaf, step)
+    def _apply_updates(
+        params: PyTree,
+        updates: PyTree,
+        value: jnp.ndarray,
+        step: int,
+    ) -> PyTree:
+        def _leaf_apply_updates(update: Any, leaf: Any) -> Any:
+            if _is_parameterized_density(leaf):
+                return density_parameterization.update(
+                    params=leaf, updates=update, value=value, step=step
+                )
+            else:
+                return optax.apply_updates(params=leaf, updates=update)
 
         return tree_util.tree_map(
-            _update_leaf,
-            latent_params,
+            _leaf_apply_updates,
+            updates,
+            params,
             is_leaf=_is_parameterized_density,
         )
 

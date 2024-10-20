@@ -97,7 +97,13 @@ class ConstraintsFn(Protocol):
 class UpdateFn(Protocol):
     """Performs the required update of a parameterized density for the given step."""
 
-    def __call__(self, params: PyTree, step: int) -> PyTree:
+    def __call__(
+        self,
+        params: PyTree,
+        updates: PyTree,
+        value: jnp.ndarray,
+        step: int,
+    ) -> PyTree:
         ...
 
 

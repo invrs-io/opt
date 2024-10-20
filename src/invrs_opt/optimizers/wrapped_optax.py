@@ -197,12 +197,12 @@ def parameterized_wrapped_optax(
     def update_fn(
         *,
         grad: PyTree,
-        value: float,
+        value: jnp.ndarray,
         params: PyTree,
         state: WrappedOptaxState,
     ) -> WrappedOptaxState:
         """Updates the state."""
-        del value, params
+        del params
 
         step, params, latent_params, opt_state = state
         metadata, latents = param_base.partition_density_metadata(latent_params)
@@ -233,12 +233,14 @@ def parameterized_wrapped_optax(
             lambda a, b: a + b, latents_grad, constraint_loss_grad
         )
 
-        updates, opt_state = opt.update(latents_grad, state=opt_state, params=latents)
-        latents = optax.apply_updates(params=latents, updates=updates)
-
-        latent_params = param_base.combine_density_metadata(metadata, latents)
+        latent_updates, opt_state = opt.update(latents_grad, opt_state, params=latents)
+        latent_params = _apply_updates(
+            params=latent_params,
+            updates=param_base.combine_density_metadata(metadata, latent_updates),
+            value=value,
+            step=step,
+        )
         latent_params = _clip(latent_params)
-        latent_params = _update_parameterized_densities(latent_params, step + 1)
         params = _params_from_latent_params(latent_params)
         return (step + 1, params, latent_params, opt_state)
 
@@ -267,15 +269,24 @@ def parameterized_wrapped_optax(
             is_leaf=_is_parameterized_density,
         )
 
-    def _update_parameterized_densities(latent_params: PyTree, step: int) -> PyTree:
-        def _update_leaf(leaf: Any) -> Any:
-            if not _is_parameterized_density(leaf):
-                return leaf
-            return density_parameterization.update(leaf, step)
+    def _apply_updates(
+        params: PyTree,
+        updates: PyTree,
+        value: jnp.ndarray,
+        step: int,
+    ) -> PyTree:
+        def _leaf_apply_updates(update: Any, leaf: Any) -> Any:
+            if _is_parameterized_density(leaf):
+                return density_parameterization.update(
+                    params=leaf, updates=update, value=value, step=step
+                )
+            else:
+                return optax.apply_updates(params=leaf, updates=update)
 
         return tree_util.tree_map(
-            _update_leaf,
-            latent_params,
+            _leaf_apply_updates,
+            updates,
+            params,
             is_leaf=_is_parameterized_density,
         )
 

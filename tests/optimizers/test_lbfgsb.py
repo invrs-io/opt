@@ -3,6 +3,7 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
+import copy
 import unittest
 
 import jax
@@ -691,8 +692,12 @@ class StepVariableParameterizationTest(unittest.TestCase):
         # at each step.
         p = filter_project.filter_project(beta=1)
 
-        def update_fn(params, step):
-            del step
+        _original_update_fn = copy.deepcopy(p.update)
+
+        def update_fn(step, params, value, updates):
+            params = _original_update_fn(
+                step=step, params=params, value=value, updates=updates
+            )
             params.metadata.beta += 1
             return params
 
