@@ -139,6 +139,9 @@ def gaussian_levelset(
 
     def from_density_fn(density: types.Density2DArray) -> GaussianLevelsetParams:
         """Return level set parameters for the given `density`."""
+        density.array = jnp.clip(
+            density.array, min=density.lower_bound, max=density.upper_bound
+        )
         length_scale = (density.minimum_width + density.minimum_spacing) / 2
         spacing_factor = length_scale_spacing_factor / length_scale
         shape = density.shape[:-2] + (

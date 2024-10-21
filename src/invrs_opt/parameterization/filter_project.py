@@ -85,6 +85,9 @@ def filter_project(beta: float) -> base.Density2DParameterization:
 
     def from_density_fn(density: types.Density2DArray) -> FilterProjectParams:
         """Return latent parameters for the given `density`."""
+        density.array = jnp.clip(
+            density.array, min=density.lower_bound, max=density.upper_bound
+        )
         array = transforms.normalized_array_from_density(density)
         array = jnp.clip(array, -1, 1)
         array *= jnp.tanh(beta)

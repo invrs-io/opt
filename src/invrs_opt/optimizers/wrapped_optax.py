@@ -240,7 +240,7 @@ def parameterized_wrapped_optax(
             value=value,
             step=step,
         )
-        latent_params = _clip(latent_params)
+        latent_params = _clip_bounded_arrays(latent_params)
         params = _params_from_latent_params(latent_params)
         return (step + 1, params, latent_params, opt_state)
 
@@ -250,9 +250,8 @@ def parameterized_wrapped_optax(
 
     def _init_latents(params: PyTree) -> PyTree:
         def _leaf_init_latents(leaf: Any) -> Any:
-            leaf = _clip(leaf)
             if not _is_density(leaf):
-                return leaf
+                return _clip_bounded_arrays(leaf)
             return density_parameterization.from_density(leaf)
 
         return tree_util.tree_map(_leaf_init_latents, params, is_leaf=_is_custom_type)
@@ -332,11 +331,11 @@ def _is_custom_type(leaf: Any) -> bool:
     return isinstance(leaf, (types.BoundedArray, types.Density2DArray))
 
 
-def _clip(pytree: PyTree) -> PyTree:
+def _clip_bounded_arrays(pytree: PyTree) -> PyTree:
     """Clips leaves on `pytree` to their bounds."""
 
     def _clip_fn(leaf: Any) -> Any:
-        if not _is_custom_type(leaf):
+        if not isinstance(leaf, types.BoundedArray):
             return leaf
         if leaf.lower_bound is None and leaf.upper_bound is None:
             return leaf

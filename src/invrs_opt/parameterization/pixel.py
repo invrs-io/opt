@@ -43,6 +43,9 @@ def pixel() -> base.Density2DParameterization:
     """Return the direct pixel parameterization."""
 
     def from_density_fn(density: types.Density2DArray) -> PixelParams:
+        density.array = jnp.clip(
+            density.array, min=density.lower_bound, max=density.upper_bound
+        )
         return PixelParams(latents=PixelLatents(density=density))
 
     def to_density_fn(params: PixelParams) -> types.Density2DArray:
@@ -60,9 +63,11 @@ def pixel() -> base.Density2DParameterization:
     ) -> PixelParams:
         """Perform updates to `params` required for the given `step`."""
         del step, value
+        lb = params.latents.density.lower_bound
+        ub = params.latents.density.upper_bound
         return PixelParams(
             latents=tree_util.tree_map(
-                lambda a, b: a + b, params.latents, updates.latents
+                lambda a, b: jnp.clip(a + b, lb, ub), params.latents, updates.latents
             ),
             metadata=params.metadata,
         )
