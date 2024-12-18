@@ -317,7 +317,10 @@ def parameterized_lbfgsb(
         latent_params = _init_latents(params)
         metadata, latents = param_base.partition_density_metadata(latent_params)
         latents, jax_lbfgsb_state = jax.pure_callback(
-            _init_state_pure, _example_state(latents, maxcor), latents
+            _init_state_pure,
+            _example_state(latents, maxcor),
+            latents,
+            vmap_method="sequential",
         )
         latent_params = param_base.combine_density_metadata(metadata, latents)
         return (
@@ -346,7 +349,7 @@ def parameterized_lbfgsb(
             flat_latent_grad: PyTree,
             value: jnp.ndarray,
             jax_lbfgsb_state: JaxLbfgsbDict,
-        ) -> Tuple[PyTree, NumpyLbfgsbDict]:
+        ) -> Tuple[NDArray, NumpyLbfgsbDict]:
             assert onp.size(value) == 1
             scipy_lbfgsb_state = ScipyLbfgsbState.from_jax(jax_lbfgsb_state)
             flat_latent_params = scipy_lbfgsb_state.x.copy()
@@ -355,6 +358,7 @@ def parameterized_lbfgsb(
                 value=onp.array(value, dtype=onp.float64),
             )
             updated_flat_latent_params = scipy_lbfgsb_state.x
+            flat_latent_updates: NDArray
             flat_latent_updates = updated_flat_latent_params - flat_latent_params
             return flat_latent_updates, scipy_lbfgsb_state.to_dict()
 
@@ -403,6 +407,7 @@ def parameterized_lbfgsb(
             flat_latents_grad,
             value,
             jax_lbfgsb_state,
+            vmap_method="sequential",
         )
         latent_updates = unflatten_fn(flat_latent_updates)
         latent_params = _apply_updates(
