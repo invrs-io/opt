@@ -54,7 +54,7 @@ BOUNDS_MAP: Dict[Tuple[bool, bool], int] = {
     (True, False): 3,  # Only the lower bound is `None`.
 }
 
-FORTRAN_INT = onp.dtypes.Int32DType()
+FORTRAN_INT = onp.dtypes.Int32DType("int32")
 
 
 def lbfgsb(
@@ -892,7 +892,7 @@ def _wa_size(n: int, maxcor: int) -> int:
     return 2 * maxcor * n + 5 * n + 11 * maxcor**2 + 8 * maxcor
 
 
-def _validate_array_dtype(x: NDArray, dtype: Union[type, str]) -> None:
+def _validate_array_dtype(x: NDArray, dtype: Union[type, str, onp.dtype[Any]]) -> None:
     """Validates that `x` is an array with the specified `dtype`."""
     if not isinstance(x, onp.ndarray):
         raise ValueError(f"`x` must be an `onp.ndarray` but got {type(x)}")
