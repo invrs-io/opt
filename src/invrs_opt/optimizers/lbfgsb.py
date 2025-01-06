@@ -54,7 +54,7 @@ BOUNDS_MAP: Dict[Tuple[bool, bool], int] = {
     (True, False): 3,  # Only the lower bound is `None`.
 }
 
-FORTRAN_INT = onp.dtypes.Int32DType("int32")
+FORTRAN_INT = onp.dtype("int32")
 
 
 def lbfgsb(
