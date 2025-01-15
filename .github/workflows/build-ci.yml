@@ -52,7 +52,7 @@ jobs:
       - name: darglint docstring validation
         run: darglint src --strictness=short --ignore-raise=ValueError
 
-  tests:
+  tests-jax-latest:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -70,6 +70,30 @@ jobs:
         run: |
             python -m pip install --upgrade pip
             pip install ".[tests,dev]"
+
+      - name: Run Python tests
+        run: |
+          pytest --cov=invrs_opt tests
+
+  tests-jax-0_4_31:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: Setup environment
+        run: |
+            python -m pip install --upgrade pip
+            pip install ".[tests,dev]"
+            pip install --upgrade "jax==0.4.31"
 
       - name: Run Python tests
         run: |
