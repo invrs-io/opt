@@ -75,7 +75,7 @@ jobs:
         run: |
           pytest --cov=invrs_opt tests
 
-  tests-jax-0_4_31:
+  tests-jax-0_4_27:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -92,8 +92,8 @@ jobs:
       - name: Setup environment
         run: |
             python -m pip install --upgrade pip
+            pip install --upgrade "jax[cpu]==0.4.27"
             pip install ".[tests,dev]"
-            pip install --upgrade "jax==0.4.31"
 
       - name: Run Python tests
         run: |
