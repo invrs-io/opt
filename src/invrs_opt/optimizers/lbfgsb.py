@@ -4,6 +4,8 @@ Copyright (c) 2023 The INVRS-IO authors.
 """
 
 import dataclasses
+import functools
+from packaging import version
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import jax
@@ -55,6 +57,11 @@ BOUNDS_MAP: Dict[Tuple[bool, bool], int] = {
 }
 
 FORTRAN_INT = scipy_lbfgsb.types.intvar.dtype
+
+if version.Version(jax.__version__) > version.Version("0.4.31"):
+    callback_sequential = functools.partial(jax.pure_callback, vmap_method="sequential")
+else:
+    callback_sequential = functools.partial(jax.pure_callback, vectorized=False)
 
 
 def lbfgsb(
@@ -316,7 +323,7 @@ def parameterized_lbfgsb(
 
         latent_params = _init_latents(params)
         metadata, latents = param_base.partition_density_metadata(latent_params)
-        latents, jax_lbfgsb_state = jax.pure_callback(
+        latents, jax_lbfgsb_state = callback_sequential(
             _init_state_pure,
             _example_state(latents, maxcor),
             latents,
@@ -401,7 +408,7 @@ def parameterized_lbfgsb(
             latents_grad
         )  # type: ignore[no-untyped-call]
 
-        flat_latent_updates, jax_lbfgsb_state = jax.pure_callback(
+        flat_latent_updates, jax_lbfgsb_state = callback_sequential(
             _update_pure,
             (flat_latents_grad, jax_lbfgsb_state),
             flat_latents_grad,
