@@ -1,5 +1,6 @@
 # invrs-opt - Optimization algorithms for inverse design
-`v0.10.2`
+![Continuous integration](https://github.com/invrs-io/opt/actions/workflows/build-ci.yml/badge.svg)
+![PyPI version](https://img.shields.io/pypi/v/invrs-opt)
 
 ## Overview
 

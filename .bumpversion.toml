@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "v0.10.2"
+current_version = "v0.10.3"
 commit = true
 commit_args = "--no-verify"
 tag = true
@@ -14,9 +14,6 @@ message = "Version updated from {current_version} to {new_version}"
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
-
-[[tool.bumpversion.files]]
-filename = "README.md"
 
 [[tool.bumpversion.files]]
 filename = "src/invrs_opt/__init__.py"
