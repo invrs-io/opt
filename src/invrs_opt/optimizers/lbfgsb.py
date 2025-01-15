@@ -327,7 +327,6 @@ def parameterized_lbfgsb(
             _init_state_pure,
             _example_state(latents, maxcor),
             latents,
-            vmap_method="sequential",
         )
         latent_params = param_base.combine_density_metadata(metadata, latents)
         return (
@@ -414,7 +413,6 @@ def parameterized_lbfgsb(
             flat_latents_grad,
             value,
             jax_lbfgsb_state,
-            vmap_method="sequential",
         )
         latent_updates = unflatten_fn(flat_latent_updates)
         latent_params = _apply_updates(
