@@ -539,7 +539,7 @@ class ConverterTest(unittest.TestCase):
             onp.testing.assert_array_equal(a, b)
 
 
-class ScipyLbfgsStateTest(unittest.TestCase):
+class ScipyLbfgsbStateTest(unittest.TestCase):
     def test_x0_shape_validation(self):
         with self.assertRaisesRegex(ValueError, "`x0` must be rank-1 but got"):
             lbfgsb.ScipyLbfgsbState.init(
