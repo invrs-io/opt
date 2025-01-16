@@ -21,7 +21,7 @@ dependencies = [
     "numpy",
     "requests",
     "optax",
-    "scipy < 1.15.0",
+    "scipy >= 1.15.0",
     "totypes",
     "types-requests",
 ]
