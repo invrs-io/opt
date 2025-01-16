@@ -52,7 +52,7 @@ jobs:
       - name: darglint docstring validation
         run: darglint src --strictness=short --ignore-raise=ValueError
 
-  tests-jax-laatest:
+  tests-jax-latest:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
