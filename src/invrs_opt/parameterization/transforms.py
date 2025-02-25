@@ -231,3 +231,40 @@ def box_downsample(x: jnp.ndarray, shape: Tuple[int, ...]) -> jnp.ndarray:
     axes = list(range(1, 2 * x.ndim, 2))
     x = x.reshape(shape)
     return jnp.mean(x, axis=axes)
+
+
+def interface_pixels(phi: jnp.ndarray, periodic: Tuple[bool, bool]) -> jnp.ndarray:
+    """Identifies interface pixels of a level set function `phi`."""
+    batch_shape = phi.shape[:-2]
+    phi = phi.reshape((-1,) + phi.shape[-2:])
+
+    pad_mode = (
+        "wrap" if periodic[0] else "edge",
+        "wrap" if periodic[1] else "edge",
+    )
+    pad_width = ((1, 1), (1, 1))
+
+    kernel = jnp.asarray([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=float)
+
+    solid = phi > 0
+    void = ~solid
+
+    solid_padded = pad2d(solid, pad_width, pad_mode)
+    num_solid_adjacent = conv(
+        x=solid_padded[:, jnp.newaxis, :, :].astype(float),
+        kernel=kernel[jnp.newaxis, jnp.newaxis, :, :],
+        padding="VALID",
+    )
+    num_solid_adjacent = jnp.squeeze(num_solid_adjacent, axis=1)
+
+    void_padded = pad2d(void, pad_width, pad_mode)
+    num_void_adjacent = conv(
+        x=void_padded[:, jnp.newaxis, :, :].astype(float),
+        kernel=kernel[jnp.newaxis, jnp.newaxis, :, :],
+        padding="VALID",
+    )
+    num_void_adjacent = jnp.squeeze(num_void_adjacent, axis=1)
+
+    interface = solid & (num_void_adjacent > 0) | void & (num_solid_adjacent > 0)
+
+    return interface.reshape(batch_shape + interface.shape[-2:])
