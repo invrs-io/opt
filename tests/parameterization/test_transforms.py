@@ -360,3 +360,53 @@ class GaussianKernelTest(unittest.TestCase):
     def test_gaussian_peak_on_gridpoint(self, fwhm_size_multiple):
         kernel = transforms._gaussian_kernel(1.0, fwhm_size_multiple)
         self.assertEqual(kernel[kernel.shape[0] // 2, kernel.shape[1] // 2], 1.0)
+
+
+class InterfacePixelsTest(unittest.TestCase):
+    def test_interface_pixels_match_expected(self):
+        array = -0.5 + jnp.asarray(
+            [
+                [0, 0, 0, 0, 0, 0],
+                [0, 0, 1, 1, 1, 1],
+                [0, 0, 1, 1, 1, 1],
+                [0, 0, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0, 0],
+            ]
+        )
+        expected = jnp.asarray(
+            [
+                [0, 0, 1, 1, 1, 1],
+                [0, 1, 1, 1, 1, 1],
+                [0, 1, 1, 0, 0, 0],
+                [0, 1, 1, 1, 1, 1],
+                [0, 0, 1, 1, 1, 1],
+            ],
+            dtype=bool,
+        )
+        onp.testing.assert_array_equal(
+            transforms.interface_pixels(array, periodic=(False, False)), expected
+        )
+
+    def test_interface_pixels_match_expected_periodic(self):
+        array = -0.5 + jnp.asarray(
+            [
+                [0, 0, 0, 0, 0, 0],
+                [0, 0, 1, 1, 1, 1],
+                [0, 0, 1, 1, 1, 1],
+                [0, 0, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0, 0],
+            ]
+        )
+        expected = jnp.asarray(
+            [
+                [0, 0, 1, 1, 1, 1],
+                [1, 1, 1, 1, 1, 1],
+                [1, 1, 1, 0, 0, 1],
+                [1, 1, 1, 1, 1, 1],
+                [0, 0, 1, 1, 1, 1],
+            ],
+            dtype=bool,
+        )
+        onp.testing.assert_array_equal(
+            transforms.interface_pixels(array, periodic=(True, True)), expected
+        )
