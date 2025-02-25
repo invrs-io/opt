@@ -619,47 +619,10 @@ def _levelset_threshold(
 ) -> jnp.ndarray:
     """Thresholds a level set function `phi`."""
     if mask_gradient:
-        interface = _interface_pixels(phi, periodic)
+        interface = transforms.interface_pixels(phi, periodic)
         phi = jnp.where(interface, phi, jax.lax.stop_gradient(phi))
     thresholded = (phi > 0).astype(float) + (phi - jax.lax.stop_gradient(phi))
     return thresholded
-
-
-def _interface_pixels(phi: jnp.ndarray, periodic: Tuple[bool, bool]) -> jnp.ndarray:
-    """Identifies interface pixels of a level set function `phi`."""
-    batch_shape = phi.shape[:-2]
-    phi = phi.reshape((-1,) + phi.shape[-2:])
-
-    pad_mode = (
-        "wrap" if periodic[0] else "edge",
-        "wrap" if periodic[1] else "edge",
-    )
-    pad_width = ((1, 1), (1, 1))
-
-    kernel = jnp.asarray([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=float)
-
-    solid = phi > 0
-    void = ~solid
-
-    solid_padded = transforms.pad2d(solid, pad_width, pad_mode)
-    num_solid_adjacent = transforms.conv(
-        x=solid_padded[:, jnp.newaxis, :, :].astype(float),
-        kernel=kernel[jnp.newaxis, jnp.newaxis, :, :],
-        padding="VALID",
-    )
-    num_solid_adjacent = jnp.squeeze(num_solid_adjacent, axis=1)
-
-    void_padded = transforms.pad2d(void, pad_width, pad_mode)
-    num_void_adjacent = transforms.conv(
-        x=void_padded[:, jnp.newaxis, :, :].astype(float),
-        kernel=kernel[jnp.newaxis, jnp.newaxis, :, :],
-        padding="VALID",
-    )
-    num_void_adjacent = jnp.squeeze(num_void_adjacent, axis=1)
-
-    interface = solid & (num_void_adjacent > 0) | void & (num_solid_adjacent > 0)
-
-    return interface.reshape(batch_shape + interface.shape[-2:])
 
 
 def _downsample_spatial_dims(x: jnp.ndarray, downsample_factor: int) -> jnp.ndarray:
