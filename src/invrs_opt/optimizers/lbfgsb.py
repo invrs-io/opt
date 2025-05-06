@@ -381,8 +381,7 @@ def parameterized_lbfgsb(
         (latents_grad,) = vjp_fn(grad)
 
         if not (
-            tree_util.tree_structure(latents_grad)
-            == tree_util.tree_structure(latents)  # type: ignore[operator]
+            tree_util.tree_structure(latents_grad) == tree_util.tree_structure(latents)
         ):
             raise ValueError(
                 f"Tree structure of `latents_grad` was different than expected, got \n"
@@ -603,7 +602,7 @@ def _bound_for_params(bound: PyTree, params: PyTree) -> ElementwiseBound:
             is_leaf=lambda x: x is None or isinstance(x, types.CUSTOM_TYPES),
         )
     )
-    if bound_treedef != params_treedef:  # type: ignore[operator]
+    if bound_treedef != params_treedef:
         raise ValueError(
             f"Tree structure of `bound` and `params` must match, but got "
             f"{bound_treedef} and {params_treedef}, respectively."

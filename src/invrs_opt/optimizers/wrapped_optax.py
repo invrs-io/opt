@@ -219,8 +219,7 @@ def parameterized_wrapped_optax(
         (latents_grad,) = vjp_fn(grad)
 
         if not (
-            tree_util.tree_structure(latents_grad)
-            == tree_util.tree_structure(latents)  # type: ignore[operator]
+            tree_util.tree_structure(latents_grad) == tree_util.tree_structure(latents)
         ):
             raise ValueError(
                 f"Tree structure of `latents_grad` was different than expected, got \n"
