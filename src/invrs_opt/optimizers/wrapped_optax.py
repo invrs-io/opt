@@ -218,9 +218,9 @@ def parameterized_wrapped_optax(
         _, vjp_fn = jax.vjp(_params_from_latents, latents)
         (latents_grad,) = vjp_fn(grad)
 
-        if not (
-            tree_util.tree_structure(latents_grad) == tree_util.tree_structure(latents)
-        ):
+        treedef = tree_util.tree_structure(latents_grad)
+        expected_treedef = tree_util.tree_structure(latents)
+        if not treedef == expected_treedef:  # type: ignore[operator]
             raise ValueError(
                 f"Tree structure of `latents_grad` was different than expected, got \n"
                 f"{tree_util.tree_structure(latents_grad)} but expected \n"
