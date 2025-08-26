@@ -388,7 +388,7 @@ def _phi_from_params(
     assert array.shape[-2] % s_factor == 0
     assert array.shape[-1] % s_factor == 0
     array = symmetry.symmetrize(array, tuple(example_density.symmetries))
-    return array
+    return jnp.asarray(array)
 
 
 # -----------------------------------------------------------------------------
