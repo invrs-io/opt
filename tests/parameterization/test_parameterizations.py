@@ -36,38 +36,48 @@ DENSITIES = (
     ),
     types.Density2DArray(
         array=jnp.zeros((10, 12)),
-        fixed_solid=jnp.zeros((10, 12), dtype=bool).at[4:8, 0].set(True),
+        fixed_solid=onp.asarray(jnp.zeros((10, 12), dtype=bool).at[4:8, 0].set(True)),
         fixed_void=None,
     ),
     types.Density2DArray(
         array=jnp.zeros((3, 10, 12)),
-        fixed_solid=jnp.zeros((3, 10, 12), dtype=bool).at[:, 4:8, 0].set(True),
+        fixed_solid=onp.asarray(
+            jnp.zeros((3, 10, 12), dtype=bool).at[:, 4:8, 0].set(True)
+        ),
         fixed_void=None,
     ),
     types.Density2DArray(
         array=jnp.zeros((10, 12)),
-        fixed_solid=jnp.zeros((10, 12), dtype=bool).at[4:8, 0].set(True),
-        fixed_void=jnp.zeros((10, 12), dtype=bool).at[4:8, -1].set(True),
+        fixed_solid=onp.asarray(jnp.zeros((10, 12), dtype=bool).at[4:8, 0].set(True)),
+        fixed_void=onp.asarray(jnp.zeros((10, 12), dtype=bool).at[4:8, -1].set(True)),
     ),
     types.Density2DArray(
         array=jnp.zeros((3, 10, 12)),
-        fixed_solid=jnp.zeros((10, 12), dtype=bool).at[4:8, 0].set(True),
-        fixed_void=jnp.zeros((10, 12), dtype=bool).at[4:8, -1].set(True),
+        fixed_solid=onp.asarray(jnp.zeros((10, 12), dtype=bool).at[4:8, 0].set(True)),
+        fixed_void=onp.asarray(jnp.zeros((10, 12), dtype=bool).at[4:8, -1].set(True)),
     ),
     types.Density2DArray(
         array=jnp.zeros((3, 10, 12)),
-        fixed_solid=jnp.zeros((3, 10, 12), dtype=bool).at[4:8, 0].set(True),
-        fixed_void=jnp.zeros((10, 12), dtype=bool).at[4:8, -1].set(True),
+        fixed_solid=onp.asarray(
+            jnp.zeros((3, 10, 12), dtype=bool).at[4:8, 0].set(True)
+        ),
+        fixed_void=onp.asarray(jnp.zeros((10, 12), dtype=bool).at[4:8, -1].set(True)),
     ),
     types.Density2DArray(
         array=jnp.zeros((3, 10, 12)),
-        fixed_solid=jnp.zeros((10, 12), dtype=bool).at[4:8, 0].set(True),
-        fixed_void=jnp.zeros((3, 10, 12), dtype=bool).at[4:8, -1].set(True),
+        fixed_solid=onp.asarray(jnp.zeros((10, 12), dtype=bool).at[4:8, 0].set(True)),
+        fixed_void=onp.asarray(
+            jnp.zeros((3, 10, 12), dtype=bool).at[4:8, -1].set(True)
+        ),
     ),
     types.Density2DArray(
         array=jnp.zeros((3, 10, 12)),
-        fixed_solid=jnp.zeros((3, 10, 12), dtype=bool).at[:, 4:8, 0].set(True),
-        fixed_void=jnp.zeros((3, 10, 12), dtype=bool).at[:, 4:8, -1].set(True),
+        fixed_solid=onp.asarray(
+            jnp.zeros((3, 10, 12), dtype=bool).at[:, 4:8, 0].set(True)
+        ),
+        fixed_void=onp.asarray(
+            jnp.zeros((3, 10, 12), dtype=bool).at[:, 4:8, -1].set(True)
+        ),
     ),
 )
 
