@@ -189,19 +189,19 @@ class FixedPixelTest(unittest.TestCase):
     @parameterized.expand(
         [
             [
-                jnp.asarray([[1, 0, 0, 0, 0]], dtype=bool),
-                jnp.asarray([[0, 0, 1, 1, 0]], dtype=bool),
-                jnp.asarray([[3.0, 0.0, -0.5, -0.5, 0.0]]),
+                onp.asarray([[1, 0, 0, 0, 0]], dtype=bool),
+                onp.asarray([[0, 0, 1, 1, 0]], dtype=bool),
+                onp.asarray([[3.0, 0.0, -0.5, -0.5, 0.0]]),
             ],
             [
                 None,
-                jnp.asarray([[0, 0, 1, 1, 0]], dtype=bool),
-                jnp.asarray([[0.0, 0.0, -0.5, -0.5, 0.0]]),
+                onp.asarray([[0, 0, 1, 1, 0]], dtype=bool),
+                onp.asarray([[0.0, 0.0, -0.5, -0.5, 0.0]]),
             ],
             [
                 None,
                 None,
-                jnp.asarray([[0.0, 0.0, 0.0, 0.0, 0.0]]),
+                onp.asarray([[0.0, 0.0, 0.0, 0.0, 0.0]]),
             ],
         ]
     )
