@@ -124,11 +124,42 @@ class Density2DMetadata:
         self.periodic = tuple(self.periodic)
         self.symmetries = tuple(self.symmetries)
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Density2DMetadata):
+            return False
+        if not (
+            self.lower_bound == other.lower_bound
+            and self.upper_bound == other.upper_bound
+            and _arrays_equal_or_both_none(self.fixed_solid, other.fixed_solid)
+            and _arrays_equal_or_both_none(self.fixed_void, other.fixed_void)
+            and self.minimum_width == other.minimum_width
+            and self.minimum_spacing == other.minimum_spacing
+            and self.periodic == other.periodic
+            and self.symmetries == other.symmetries
+        ):
+            return False
+        return True
+
     @classmethod
     def from_density(self, density: types.Density2DArray) -> "Density2DMetadata":
         density_metadata_dict = dataclasses.asdict(density)
         del density_metadata_dict["array"]
         return Density2DMetadata(**density_metadata_dict)
+
+
+def _arrays_equal_or_both_none(a: Optional[Array], b: Optional[Array]) -> bool:
+    """Return `True` if `a` and `b` are equal arrays or both `None`."""
+    if (a is None, b is None) not in ((True, True), (False, False)):
+        return False
+    if a is None and b is None:
+        return True
+    assert isinstance(a, onp.ndarray)
+    assert isinstance(b, onp.ndarray)
+    if a.dtype != b.dtype:
+        return False
+    if a.shape != b.shape:
+        return False
+    return bool(onp.all(a == b))
 
 
 def _flatten_density_2d_metadata(
