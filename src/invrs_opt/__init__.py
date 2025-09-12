@@ -3,7 +3,7 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
-__version__ = "v0.10.6"
+__version__ = "v0.10.7"
 __author__ = "Martin F. Schubert <mfschubert@gmail.com>"
 
 from invrs_opt import parameterization as parameterization
