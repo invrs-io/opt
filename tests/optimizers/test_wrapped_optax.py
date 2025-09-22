@@ -434,4 +434,4 @@ class StepVariableParameterizationTest(unittest.TestCase):
             state = step_fn(state)
 
         # Check that beta has actually been incremented.
-        self.assertEqual(state[2].metadata.beta, 11)
+        self.assertEqual(state.latent_params.metadata.beta, 11)
