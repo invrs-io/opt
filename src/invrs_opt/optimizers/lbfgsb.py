@@ -16,7 +16,7 @@ from jax import flatten_util, tree_util
 from scipy.optimize._lbfgsb_py import (  # type: ignore[import-untyped]
     _lbfgsb as scipy_lbfgsb,
 )
-from totypes import types
+from totypes import json_utils, types
 
 from invrs_opt.optimizers import base
 from invrs_opt.parameterization import (
@@ -31,7 +31,26 @@ PyTree = Any
 ElementwiseBound = Union[NDArray, Sequence[Optional[float]]]
 NumpyLbfgsbDict = Dict[str, NDArray]
 JaxLbfgsbDict = Dict[str, jnp.ndarray]
-LbfgsbState = Tuple[int, PyTree, PyTree, JaxLbfgsbDict]
+
+
+@dataclasses.dataclass
+class LbfgsbState:
+    """Stores the state of the L-BFGS-B optimizer."""
+
+    step: int
+    params: PyTree
+    latent_params: PyTree
+    opt_state: JaxLbfgsbDict
+
+
+tree_util.register_dataclass(
+    LbfgsbState,
+    data_fields=["step", "params", "latent_params", "opt_state"],
+    meta_fields=[],
+)
+
+
+json_utils.register_custom_type(LbfgsbState)
 
 
 # Task message prefixes for the underlying L-BFGS-B implementation.
@@ -327,17 +346,16 @@ def parameterized_lbfgsb(
             latents,
         )
         latent_params = param_base.combine_density_metadata(metadata, latents)
-        return (
-            0,  # step
-            _params_from_latent_params(latent_params),  # params
-            latent_params,  # latent params
-            jax_lbfgsb_state,  # opt state
+        return LbfgsbState(
+            step=0,
+            params=_params_from_latent_params(latent_params),
+            latent_params=latent_params,
+            opt_state=jax_lbfgsb_state,
         )
 
     def params_fn(state: LbfgsbState) -> PyTree:
         """Returns the parameters for the given `state`."""
-        _, params, _, _ = state
-        return params
+        return state.params
 
     def update_fn(
         *,
@@ -366,8 +384,7 @@ def parameterized_lbfgsb(
             flat_latent_updates = updated_flat_latent_params - flat_latent_params
             return flat_latent_updates, scipy_lbfgsb_state.to_dict()
 
-        step, _, latent_params, jax_lbfgsb_state = state
-        metadata, latents = param_base.partition_density_metadata(latent_params)
+        metadata, latents = param_base.partition_density_metadata(state.latent_params)
 
         def _params_from_latents(latents: PyTree) -> PyTree:
             latent_params = param_base.combine_density_metadata(metadata, latents)
@@ -404,23 +421,28 @@ def parameterized_lbfgsb(
             latents_grad
         )  # type: ignore[no-untyped-call]
 
-        flat_latent_updates, jax_lbfgsb_state = callback_sequential(
+        flat_latent_updates, opt_state = callback_sequential(
             _update_pure,
-            (flat_latents_grad, jax_lbfgsb_state),
+            (flat_latents_grad, state.opt_state),
             flat_latents_grad,
             value,
-            jax_lbfgsb_state,
+            state.opt_state,
         )
         latent_updates = unflatten_fn(flat_latent_updates)
         latent_params = _apply_updates(
-            params=latent_params,
+            params=state.latent_params,
             updates=param_base.combine_density_metadata(metadata, latent_updates),
             value=value,
-            step=step,
+            step=state.step,
         )
         latent_params = _clip(latent_params)
         params = _params_from_latent_params(latent_params)
-        return step + 1, params, latent_params, jax_lbfgsb_state
+        return LbfgsbState(
+            step=state.step + 1,
+            params=params,
+            latent_params=latent_params,
+            opt_state=opt_state,
+        )
 
     # -------------------------------------------------------------------------
     # Functions related to the density parameterization.
@@ -501,7 +523,7 @@ def parameterized_lbfgsb(
 
 def is_converged(state: LbfgsbState) -> jnp.ndarray:
     """Returns `True` if the optimization has converged."""
-    return state[3]["converged"]
+    return state.opt_state["converged"]
 
 
 # ------------------------------------------------------------------------------

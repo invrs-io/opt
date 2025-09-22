@@ -3,13 +3,14 @@
 Copyright (c) 2023 The INVRS-IO authors.
 """
 
-from typing import Any, Optional, Tuple
+import dataclasses
+from typing import Any, Optional
 
 import jax
 import jax.numpy as jnp
 import optax  # type: ignore[import-untyped]
 from jax import tree_util
-from totypes import types
+from totypes import json_utils, types
 
 from invrs_opt.optimizers import base
 from invrs_opt.parameterization import (
@@ -20,7 +21,26 @@ from invrs_opt.parameterization import (
 )
 
 PyTree = Any
-WrappedOptaxState = Tuple[int, PyTree, PyTree, PyTree]
+
+
+@dataclasses.dataclass
+class WrappedOptaxState:
+    """Stores the state of a wrapped optax optimizer."""
+
+    step: int
+    params: PyTree
+    latent_params: PyTree
+    opt_state: PyTree
+
+
+tree_util.register_dataclass(
+    WrappedOptaxState,
+    data_fields=["step", "params", "latent_params", "opt_state"],
+    meta_fields=[],
+)
+
+
+json_utils.register_custom_type(WrappedOptaxState)
 
 
 def wrapped_optax(opt: optax.GradientTransformation) -> base.Optimizer:
@@ -182,17 +202,16 @@ def parameterized_wrapped_optax(
         """Initializes the optimization state."""
         latent_params = _init_latents(params)
         _, latents = param_base.partition_density_metadata(latent_params)
-        return (
-            0,  # step
-            _params_from_latent_params(latent_params),  # params
-            latent_params,  # latent params
-            opt.init(latents),  # opt state
+        return WrappedOptaxState(
+            step=0,
+            params=_params_from_latent_params(latent_params),
+            latent_params=latent_params,
+            opt_state=opt.init(latents),
         )
 
     def params_fn(state: WrappedOptaxState) -> PyTree:
         """Returns the parameters for the given `state`."""
-        _, params, _, _ = state
-        return params
+        return state.params
 
     def update_fn(
         *,
@@ -204,8 +223,7 @@ def parameterized_wrapped_optax(
         """Updates the state."""
         del params
 
-        step, params, latent_params, opt_state = state
-        metadata, latents = param_base.partition_density_metadata(latent_params)
+        metadata, latents = param_base.partition_density_metadata(state.latent_params)
 
         def _params_from_latents(latents: PyTree) -> PyTree:
             latent_params = param_base.combine_density_metadata(metadata, latents)
@@ -232,16 +250,23 @@ def parameterized_wrapped_optax(
             lambda a, b: a + b, latents_grad, constraint_loss_grad
         )
 
-        latent_updates, opt_state = opt.update(latents_grad, opt_state, params=latents)
+        latent_updates, opt_state = opt.update(
+            latents_grad, state.opt_state, params=latents
+        )
         latent_params = _apply_updates(
-            params=latent_params,
+            params=state.latent_params,
             updates=param_base.combine_density_metadata(metadata, latent_updates),
             value=value,
-            step=step,
+            step=state.step,
         )
         latent_params = _clip(latent_params)
         params = _params_from_latent_params(latent_params)
-        return (step + 1, params, latent_params, opt_state)
+        return WrappedOptaxState(
+            step=state.step + 1,
+            params=params,
+            latent_params=latent_params,
+            opt_state=opt_state,
+        )
 
     # -------------------------------------------------------------------------
     # Functions related to the density parameterization.
