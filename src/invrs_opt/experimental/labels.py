@@ -1,6 +1,6 @@
 """Defines labels and messages used in the context of an optimization service.
 
-Copyright (c) 2023 The INVRS-IO authors.
+Copyright (c) 2025 invrs.io LLC
 """
 
 VALUE = "value"

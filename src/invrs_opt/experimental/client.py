@@ -1,6 +1,6 @@
 """Defines basic client optimizers for use with an optimization service.
 
-Copyright (c) 2023 The INVRS-IO authors.
+Copyright (c) 2025 invrs.io LLC
 """
 
 import json

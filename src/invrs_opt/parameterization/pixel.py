@@ -1,6 +1,6 @@
 """Defines the direct pixel parameterization for density arrays.
 
-Copyright (c) 2023 The INVRS-IO authors.
+Copyright (c) 2025 invrs.io LLC
 """
 
 import dataclasses
