@@ -1,6 +1,6 @@
 """Defines tests across all optimization algorithms.
 
-Copyright (c) 2023 The INVRS-IO authors.
+Copyright (c) 2025 invrs.io LLC
 """
 
 import itertools

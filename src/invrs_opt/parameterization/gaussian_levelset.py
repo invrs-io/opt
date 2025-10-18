@@ -1,6 +1,6 @@
 """Defines Gaussian radial basis function levelset parameterization.
 
-Copyright (c) 2023 The INVRS-IO authors.
+Copyright (c) 2025 invrs.io LLC
 """
 
 import dataclasses
