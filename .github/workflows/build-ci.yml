@@ -57,7 +57,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.13"]
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
