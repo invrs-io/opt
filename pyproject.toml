@@ -1,12 +1,12 @@
 [project]
 
 name = "invrs_opt"
-version = "v0.12.0"
+version = "v0.12.1"
 description = "Algorithms for inverse design"
 keywords = ["topology", "optimization", "jax", "inverse design"]
 readme = "README.md"
 requires-python = ">=3.7"
-license = {file = "LICENSE"}
+license = "MIT"
 
 authors = [
     {name = "Martin F. Schubert", email = "mfschubert@gmail.com"},
